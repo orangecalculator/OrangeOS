@@ -19,6 +19,17 @@ run() {
   qemu-system-i386 -hda boot.bin "$@"
 }
 
+run_gdb() {
+  qemu-system-i386 -hda boot.bin -s -S "$@" &
+  local qemu_pid="$!"
+
+  gdb-multiarch \
+    -ex "target remote :1234" \
+    -ex "set architecture i8086"
+
+  wait "$qemu_pid"
+}
+
 main() {
   if [ $# -lt 1 ] ; then
     echo "Usage: $0 [COMMAND]" >&2
@@ -31,6 +42,7 @@ main() {
   case "$command" in
     build) build "$@" ;;
     run) run "$@" ;;
+    run_gdb) run_gdb "$@" ;;
     *)
       echo "Unknown command $command" >&2 ;
       return 1;
