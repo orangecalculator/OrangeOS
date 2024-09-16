@@ -13,6 +13,9 @@ build() {
   echo "Built following binary"
 
   x86_64-linux-gnu-objdump -b binary -m i386 -Maddr16,data16 -D boot.bin
+  dd if=message.txt of=boot.bin bs=512 count=1 seek=1
+
+  truncate --size=$((2 * 512)) boot.bin
 }
 
 run() {

@@ -40,8 +40,32 @@ times 2 + 0x3C - ($ - $$) db 0
   sti
 .finish_context_setup:
 
-  ; On entry, the number of current boot disk is provided on dx
-  ; TODO: load the bootloader from disk
+  ; On entry, the number of current boot disk is provided on dl
+
+  mov ah, 0x02
+  mov al, 1
+  mov ch, 0x00
+  mov cl, 0x02 ; Second sector
+  mov dh, 0x00
+  ; dl is already set after BIOS initialization
+  mov bx, 0x0200
+  int 0x13
+
+  jc .disk_read_error
+.disk_read_success:
+  mov si, str_disk_success
+  call printstr
+  mov al, ':'
+  call printchar
+  mov al, ' '
+  call printchar
+  mov si, end_of_bootsector
+  call printstr
+  jmp .disk_read_finish
+.disk_read_error:
+  mov si, str_disk_error
+  call printstr
+.disk_read_finish:
 
   jmp $
 
@@ -62,7 +86,14 @@ printchar:
   int 0x10
   ret
 
+str_disk_success:
+  db "DISK READ SUCCESS", 0
+str_disk_error:
+  db "DISK READ ERROR", 0
+
 ; Boot signature
 times 510-($-$$) db 0
 db 0x55
 db 0xAA
+
+end_of_bootsector:
