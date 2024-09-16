@@ -1,7 +1,19 @@
-ORG 0x7C00
+ORG 0
 BITS 16
 
 start:
+  ; Setup segment registers for consistency
+  ; Cannot use the stack until setup is complete
+  jmp 0x7c0:.start_cs
+.start_cs:
+  mov ax, 0x7c0
+  mov ds, ax
+  mov es, ax
+  mov ax, 0
+  mov ss, ax
+  mov sp, 0x7c00
+.finish_context_setup:
+
   mov cx, ss
   mov dx, sp
   mov si, hellomessage
