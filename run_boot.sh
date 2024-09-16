@@ -36,6 +36,28 @@ compile() {
   x86_64-linux-gnu-objdump -m i386 -Maddr16,data16 -d boot.o
 }
 
+flash() {
+  if [ "$#" -lt 1 ] ; then
+    echo "Device must be specified" >&2
+    return 1
+  fi
+
+  if [ $(id -u) -ne 0 ] ; then
+    echo "Flash must be run with root" >&2
+    return 1
+  fi
+
+  local dev="$1"
+  local tempfile="$(mktemp)"
+
+  dd if=boot.bin of=$dev count=1
+  sync
+
+  trap "rm -f $tempfile" EXIT
+  dd if=$dev count=1 >$tempfile
+  xxd $tempfile
+}
+
 main() {
   if [ $# -lt 1 ] ; then
     echo "Usage: $0 [COMMAND]" >&2
@@ -50,6 +72,7 @@ main() {
     run) run "$@" ;;
     run_gdb) run_gdb "$@" ;;
     compile) compile "$@" ;;
+    flash) flash "$@" ;;
     *)
       echo "Unknown command $command" >&2 ;
       return 1;
