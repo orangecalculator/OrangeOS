@@ -2,6 +2,11 @@ ORG 0
 BITS 16
 
 start:
+
+.bios_parameter_block:
+db 0xEB, 0x3C, 0x90 ; JMP SHORT 3C NOP
+times 2 + 0x3C - ($ - $$) db 0
+
   ; Setup segment registers for consistency
   ; Cannot use the stack until setup is complete
   jmp 0x7c0:.start_cs
