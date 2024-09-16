@@ -30,6 +30,12 @@ run_gdb() {
   wait "$qemu_pid"
 }
 
+compile() {
+  x86_64-linux-gnu-gcc -m16 -c boot.c -O
+
+  x86_64-linux-gnu-objdump -m i386 -Maddr16,data16 -d boot.o
+}
+
 main() {
   if [ $# -lt 1 ] ; then
     echo "Usage: $0 [COMMAND]" >&2
@@ -43,6 +49,7 @@ main() {
     build) build "$@" ;;
     run) run "$@" ;;
     run_gdb) run_gdb "$@" ;;
+    compile) compile "$@" ;;
     *)
       echo "Unknown command $command" >&2 ;
       return 1;
