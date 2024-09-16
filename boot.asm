@@ -46,6 +46,23 @@ times 2 + 0x3C - ($ - $$) db 0
 
   int 0
 
+  mov di, 0
+.dump_start:
+  cmp di, 0x100
+  jge .dump_finish
+
+  mov al, ' '
+  call printchar
+
+  mov ax, word[ss:di]
+  call printhex
+
+  add di, 2
+  jmp .dump_start
+
+.dump_finish:
+
+
   jmp $
 
 handle_div_zero:
