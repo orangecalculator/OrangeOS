@@ -9,15 +9,27 @@ times 2 + 0x3C - ($ - $$) db 0
 
   ; Setup segment registers for consistency
   ; Cannot use the stack until setup is complete
-  jmp 0x7c0:.start_cs
-.start_cs:
-  mov ax, 0x7c0
+  ; Note that the stack is initialized to a suitable place,
+  ; but does not seem to be in standard protocol
+  jmp 0x07c0:.start_context_setup
+.start_context_setup:
+  cli
+  mov ax, 0x07c0
   mov ds, ax
   mov es, ax
-  mov ax, 0
+  mov ax, 0x0000
   mov ss, ax
   mov sp, 0x7c00
+  sti
 .finish_context_setup:
+
+.start_interrupt_setup:
+  mov word[ss:0x0000], handle_div_zero
+  mov word[ss:0x0002], 0x07c0
+
+  int 0
+
+.finish_interrupt_setup:
 
   mov cx, ss
   mov dx, sp
@@ -31,9 +43,21 @@ times 2 + 0x3C - ($ - $$) db 0
   call printhex
   lea ax, $
   call printhex
+
+  int 0
+
   jmp $
 
-; TODO: Where is the stack pointing to when initialized?
+handle_div_zero:
+  pusha
+  mov si, .div_zero_message
+  call printstr
+  popa
+  iret
+
+.div_zero_message:
+  db "DIVZERO", 0
+
 printstr:
   mov bx, 0
 .call_printchar:
