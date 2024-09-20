@@ -2,6 +2,20 @@
 
 build() {
   local boot_asm=boot.asm
+
+  while [ "$#" -gt 0 ] ; do
+    case "$1" in
+      -f)
+        shift ; 
+        boot_asm="$1" ; shift ;
+        ;;
+      -m16)
+        objdump_extra_flags="$objdump_extra_flags -Maddr16,data16" ;
+        shift ;
+        ;;
+    esac
+  done
+
   if [ "$#" -ge 1 ] ; then
     boot_asm="$1"
   fi
@@ -12,7 +26,7 @@ build() {
 
   echo "Built following binary"
 
-  x86_64-linux-gnu-objdump -b binary -m i386 -Maddr16,data16 -D boot.bin
+  x86_64-linux-gnu-objdump -b binary -m i386 -D boot.bin $objdump_extra_flags
   dd if=message.txt of=boot.bin bs=512 count=1 seek=1
 
   truncate --size=$((2 * 512)) boot.bin
@@ -23,14 +37,8 @@ run() {
 }
 
 run_gdb() {
-  qemu-system-i386 -hda boot.bin -s -S "$@" &
-  local qemu_pid="$!"
-
   gdb-multiarch \
-    -ex "target remote :1234" \
-    -ex "set architecture i8086"
-
-  wait "$qemu_pid"
+    -ex "target remote | qemu-system-i386 -hda boot.bin -S -gdb stdio $@"
 }
 
 compile() {

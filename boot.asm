@@ -1,5 +1,8 @@
 ORG 0
 BITS 16
+
+%define BASE_ADDR 0x7c00
+
   ; Actually, most of the instructions are position independent,
   ; so the origin settings will not likely matter.
 
@@ -67,7 +70,7 @@ times 2 + 0x3C - ($ - $$) db 0
   call printstr
 .disk_read_finish:
 
-  jmp $
+  jmp protected_mode_bootstrap
 
 printstr:
   mov bx, 0
@@ -86,10 +89,63 @@ printchar:
   int 0x10
   ret
 
+; Note that even though you should use 16 bit instructions in real mode, you can override to use 32 bit instructions for a single instruction.
+; See also: https://stackoverflow.com/questions/6917503/is-it-possible-to-use-32-bits-registers-instructions-in-real-mode
+protected_mode_bootstrap:
+  cli
+  lgdt[gdt_descriptor]
+  mov eax, cr0
+  or eax, 0x1
+  mov cr0, eax
+  ; sti ; TODO: Why do you need to disable interrupt here?
+
+%define CODE_SEG gdt_table_entry_code - gdt_table_start
+%define DATA_SEG gdt_table_entry_data - gdt_table_start
+
+  jmp CODE_SEG:(BASE_ADDR + protected_mode_start)
+
+BITS 32
+
+protected_mode_start:
+
+%define STACK_BASE_ADDR 0x00200000 ; 2M
+
+  ; Setup data segment selectors here
+  mov ax, DATA_SEG
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+  mov ss, ax
+  mov ebp, STACK_BASE_ADDR
+  mov esp, ebp
+  jmp $
+
 str_disk_success:
   db "DISK READ SUCCESS", 0
 str_disk_error:
   db "DISK READ ERROR", 0
+
+; GDT Descriptor
+times 480-($-$$) db 0
+
+gdt_table_start:
+gdt_table_entry_null:
+  dd 0x00000000
+  dd 0x00000000
+
+gdt_table_entry_code:
+  dw 0xffff, 0x0000
+  db 0x00, 0x9b, 0xcf, 0x00
+
+gdt_table_entry_data:
+  dw 0xffff, 0x0000
+  db 0x00, 0x93, 0xcf, 0x00
+gdt_table_end:
+
+gdt_descriptor:
+  dw gdt_table_end - gdt_table_start - 1 ; Subtracted by 1 due to architecture design
+  dd BASE_ADDR + gdt_table_start
 
 ; Boot signature
 times 510-($-$$) db 0
