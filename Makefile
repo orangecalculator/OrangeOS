@@ -4,6 +4,9 @@ MKDIR_P := mkdir -p
 RM := rm -rf
 TRUNCATE := truncate
 
+QEMU := qemu-system-i386
+GDB := gdb-multiarch
+
 CROSS_COMPILE ?= x86_64-linux-gnu-
 
 AR := $(CROSS_COMPILE)ar
@@ -30,6 +33,13 @@ clean:
 	$(RM) bin/ build/
 
 all: $(OUT_BOOT)
+
+run_boot: $(OUT_BOOT)
+	$(QEMU) -hda $<
+
+run_gdb_boot: $(OUT_BOOT)
+	$(GDB) \
+		-ex "target remote | $(QEMU) -hda $< -S -gdb stdio"
 
 dump_boot: $(OUT_BOOT)
 	$(OBJDUMP) -b binary -m i386 -D $<
