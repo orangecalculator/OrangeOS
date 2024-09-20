@@ -110,6 +110,7 @@ protected_mode_start:
 
 %define STACK_BASE_ADDR 0x00200000 ; 2M
 
+.setup_data_segment_selector:
   ; Setup data segment selectors here
   mov ax, DATA_SEG
   mov ds, ax
@@ -119,6 +120,13 @@ protected_mode_start:
   mov ss, ax
   mov ebp, STACK_BASE_ADDR
   mov esp, ebp
+
+.enable_a20_line:
+  ; Enable the A20 line
+  in al, 0x92
+  or al, 0x02
+  out 0x92, al
+
   jmp $
 
 str_disk_success:
