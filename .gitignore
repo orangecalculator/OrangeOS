@@ -79,6 +79,8 @@ dkms.conf
 
 # End of https://www.toptal.com/developers/gitignore/api/c,c++,assembler
 
+.cache
 compile_commands.json
+
 /bin/
 /build/

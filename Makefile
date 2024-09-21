@@ -24,26 +24,32 @@ NASM := nasm
 
 NASMFLAGS += -g
 LDFLAGS += -g -O0
-CFLAGS += -g -O0
+COMMONFLAGS += -g -O0
 
 LDFLAGS += -relocatable
 
 # Disable standard library facility
-CFLAGS += -ffreestanding -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -fno-pie -no-pie
+COMMONFLAGS += -ffreestanding -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -fno-pie -no-pie
 
 # Prefer safety when compiling
-CFLAGS += -falign-jumps -falign-functions -falign-labels -falign-loops \
+COMMONFLAGS += -falign-jumps -falign-functions -falign-labels -falign-loops \
 					-fstrength-reduce -fomit-frame-pointer -finline-functions \
 					-Wl,--orphan-handling=discard
 					# -fno-asynchronous-unwind-tables
 
 # Leverage compiler diagnostics
-CFLAGS += -Wall -Werror -Wno-unused-functions -Wno-unused-label -Wno-cpp -Wno-unused-parameter
+COMMONFLAGS += -Wall -Werror -Wno-unused-functions -Wno-unused-label -Wno-cpp -Wno-unused-parameter
 
 # Include directories in C
-CFLAGS += -Iinclude
+COMMONFLAGS += -Iinclude
 
-CFLAGS += -std=gnu99
+CFLAGS += $(COMMONFLAGS)
+CXXFLAGS += $(COMMONFLAGS)
+
+CXXFLAGS += -fno-exceptions -fno-rtti
+
+CFLAGS += -std=gnu11
+CXXFLAGS += -std=gnu++17
 
 SRC_BOOT := src/boot/boot.asm
 FOOTER_BOOT := src/boot/message.txt
@@ -52,8 +58,9 @@ OUT_BOOT := bin/boot.bin
 
 SRC_NASM := src/kernel.asm
 SRC_C := src/kernel.c
+SRC_CXX := 
 
-OBJ_KERNEL := $(patsubst %,build/%.o,$(SRC_NASM) $(SRC_C))
+OBJ_KERNEL := $(patsubst %,build/%.o,$(SRC_NASM) $(SRC_C) $(SRC_CXX))
 OUT_KERNEL := build/kernelfull.o
 
 OUT := bin/os.bin
@@ -117,3 +124,7 @@ build/%.asm.o: %.asm
 build/%.c.o: %.c
 	$(MKDIR_P) $(dir $@)
 	$(CC) -c -o $@ $< $(CFLAGS)
+
+build/%.cpp.o: %.cpp
+	$(MKDIR_P) $(dir $@)
+	$(CXX) -c -o $@ $< $(CXXFLAGS)
