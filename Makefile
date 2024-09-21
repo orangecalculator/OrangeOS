@@ -24,6 +24,26 @@ NASM := nasm
 
 NASMFLAGS += -g
 LDFLAGS += -g -O0
+CFLAGS += -g -O0
+
+LDFLAGS += -relocatable
+
+# Disable standard library facility
+CFLAGS += -ffreestanding -nostdlib -fno-builtin -nostartfiles -nodefaultlibs -fno-pie -no-pie
+
+# Prefer safety when compiling
+CFLAGS += -falign-jumps -falign-functions -falign-labels -falign-loops \
+					-fstrength-reduce -fomit-frame-pointer -finline-functions \
+					-Wl,--orphan-handling=discard
+					# -fno-asynchronous-unwind-tables
+
+# Leverage compiler diagnostics
+CFLAGS += -Wall -Werror -Wno-unused-functions -Wno-unused-label -Wno-cpp -Wno-unused-parameter
+
+# Include directories in C
+CFLAGS += -Iinclude
+
+CFLAGS += -std=gnu99
 
 SRC_BOOT := src/boot/boot.asm
 FOOTER_BOOT := src/boot/message.txt
@@ -31,14 +51,14 @@ OBJ_BOOT := build/$(SRC_BOOT).o
 OUT_BOOT := bin/boot.bin
 
 SRC_NASM := src/kernel.asm
+SRC_C := src/kernel.c
 
-OBJ_KERNEL := $(patsubst %,build/%.o,$(SRC_NASM))
+OBJ_KERNEL := $(patsubst %,build/%.o,$(SRC_NASM) $(SRC_C))
 OUT_KERNEL := build/kernelfull.o
 
 OUT := bin/os.bin
 
 LINKER_SCRIPT := src/script.ld
-LINKER_FLAGS += -ffreestanding -nostdlib
 
 .PHONY: clean all dump_boot dump_boot16 run run_gdb dump dump16
 clean:
@@ -62,9 +82,13 @@ dump_boot16: $(OUT_BOOT)
 run: $(OUT)
 	$(QEMU) -hda $<
 
-run_gdb: $(OUT)
+run_gdb: $(OUT) $(OUT_KERNEL)
 	$(GDB) \
-		-ex "target remote | $(QEMU) -hda $< -S -gdb stdio"
+		-ex "target remote | $(QEMU) -hda $(OUT) -S -gdb stdio" \
+		-ex "set architecture i386" \
+		-ex "set confirm off" \
+		-ex "add-symbol-file $(OUT_KERNEL) 0x100000" \
+		-ex "set confirm on"
 
 dump: $(OUT)
 	$(OBJDUMP) -b binary -m i386 -D $<
@@ -74,7 +98,7 @@ dump16: $(OUT)
 
 $(OUT): $(OBJ_BOOT) $(OUT_KERNEL) $(LINKER_SCRIPT)
 	$(MKDIR_P) $(dir $@)
-	$(CC) -T $(LINKER_SCRIPT) -o $@ $(OBJ_BOOT) $(OUT_KERNEL) $(LDFLAGS) $(LINKER_FLAGS)
+	$(CC) -T $(LINKER_SCRIPT) -o $@ $(OBJ_BOOT) $(OUT_KERNEL) $(CFLAGS)
 
 # Nasm build rule
 $(OUT_BOOT): $(OBJ_BOOT) $(FOOTER_BOOT)
@@ -89,3 +113,7 @@ $(OUT_KERNEL): $(OBJ_KERNEL)
 build/%.asm.o: %.asm
 	$(MKDIR_P) $(dir $@)
 	$(NASM) $(NASMFLAGS) -f elf -o $@ $<
+
+build/%.c.o: %.c
+	$(MKDIR_P) $(dir $@)
+	$(CC) -c -o $@ $< $(CFLAGS)

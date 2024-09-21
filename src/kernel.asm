@@ -1,9 +1,9 @@
 BITS 32
 
+EXTERN kernel_main
+
 GLOBAL _start
 GLOBAL kernel_start
-
-db "HELLO FROM KERNEL SECTOR", 0x00
 
 _start:
 kernel_start:
@@ -20,6 +20,8 @@ kernel_start:
   in al, 0x92
   or al, 0x02
   out 0x92, al
+
+  call kernel_main
 
   jmp $
 
