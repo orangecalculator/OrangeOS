@@ -38,7 +38,7 @@ OUT := bin/os.bin
 LINKER_SCRIPT := src/script.ld
 LDFLAGS += -ffreestanding -nostdlib
 
-.PHONY: clean all dump_boot dump_boot16
+.PHONY: clean all dump_boot dump_boot16 run run_gdb dump dump16
 clean:
 	$(RM) bin/ build/
 
@@ -70,10 +70,9 @@ dump: $(OUT)
 dump16: $(OUT)
 	$(OBJDUMP) -b binary -m i386 -D $< -Maddr16,data16
 
-$(OUT): $(OBJ_BOOT) $(OBJ)
+$(OUT): $(OBJ_BOOT) $(OBJ) $(LINKER_SCRIPT)
 	$(MKDIR_P) $(dir $@)
-	# $(DD) if=$(OUT_BOOT) of=$(OUT)
-	$(CC) -T $(LINKER_SCRIPT) -o $@ $^ $(LDFLAGS)
+	$(CC) -T $(LINKER_SCRIPT) -o $@ $(OBJ_BOOT) $(OBJ) $(LDFLAGS)
 
 # Nasm build rule
 $(OUT_BOOT): $(OBJ_BOOT) $(FOOTER_BOOT)

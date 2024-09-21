@@ -1,7 +1,7 @@
 ; Origin is set to 0x7c00 by the linker script.
 BITS 16
 
-EXTERN protected_mode_start
+EXTERN kernel_start
 
 SECTION .boot
 
@@ -44,34 +44,6 @@ times 2 + 0x3C - ($ - $$) db 0
   mov sp, 0x7c00
   sti
 .finish_context_setup:
-
-  ; On entry, the number of current boot disk is provided on dl
-
-  mov ah, 0x02
-  mov al, 1
-  mov ch, 0x00
-  mov cl, 0x02 ; Second sector
-  mov dh, 0x00
-  ; dl is already set after BIOS initialization
-  mov bx, end_of_bootsector
-  int 0x13
-
-  jc .disk_read_error
-.disk_read_success:
-  mov si, str_disk_success
-  call printstr
-  mov al, ':'
-  call printchar
-  mov al, ' '
-  call printchar
-  mov si, end_of_bootsector
-  call printstr
-  jmp .disk_read_finish
-.disk_read_error:
-  mov si, str_disk_error
-  call printstr
-.disk_read_finish:
-
   jmp protected_mode_bootstrap
 
 printstr:
@@ -104,6 +76,13 @@ protected_mode_bootstrap:
 %define CODE_SEG gdt_table_entry_code - gdt_table_start
 %define DATA_SEG gdt_table_entry_data - gdt_table_start
 
+  ; Jump is required to start protected mode functionality
+  jmp CODE_SEG:protected_mode_start
+
+BITS 32
+
+protected_mode_start:
+
 .setup_data_segment_selector:
   ; Setup data segment selectors here
   mov ax, DATA_SEG
@@ -113,13 +92,66 @@ protected_mode_bootstrap:
   mov gs, ax
   mov ss, ax
 
-BITS 32
+EXTERN KERNEL_RUNTIME_START
+EXTERN DISK_KERNEL_ADDR_SECTOR
+EXTERN KERNEL_RUNTIME_SIZE_SECTOR
+
+.load_kernel:
+  mov edi, KERNEL_RUNTIME_START
+  mov esi, DISK_KERNEL_ADDR_SECTOR
+  mov ecx, KERNEL_RUNTIME_SIZE_SECTOR
+  call ata_lba_read_simple
 
 .kernel_trampoline:
-  ; TODO: Load kernel before jump
-  jmp $
+  jmp kernel_start
 
-  jmp CODE_SEG:protected_mode_start
+; void ata_lba_read_simple([edi] void *buffer, [esi] unsigned long diskaddr, [ecx] uint8_t nsector)
+ata_lba_read_simple:
+  ; Send lba[24:32]
+  mov edx, 0x01f6
+  mov eax, esi
+  shr eax, 24
+  or al, 0xe0
+  out dx, al
+
+  ; Send number of sectors to read
+  mov edx, 0x01f2
+  mov eax, ecx
+  out dx, al
+
+  ; Send lba[0:8]
+  mov edx, 0x1f3
+  mov eax, esi
+  out dx, al
+
+  ; Send lba[8:16]
+  mov edx, 0x1f4
+  mov eax, esi
+  shr eax, 8
+  out dx, al
+
+  ; Send lba[16:24]
+  mov edx, 0x1f5
+  mov eax, esi
+  shr eax, 16
+  out dx, al
+
+  ; Initiate read operation
+  mov edx, 0x1f7
+  mov al, 0x20
+  out dx, al
+
+.wait_ready:
+  in al, dx
+  test al, 0x08
+  jz .wait_ready
+
+.read_sector:
+  mov edx, 0x1f0
+  shl ecx, 8 ; Read in word graularity, so multiply by 256
+  rep insw
+
+  ret
 
 BITS 16
 

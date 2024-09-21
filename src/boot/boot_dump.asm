@@ -64,6 +64,35 @@ times 2 + 0x3C - ($ - $$) db 0
 
   jmp $
 
+  ; Routine to load the next sector in the current asm file.
+  ; Just for saving.
+
+  ; On entry, the number of current boot disk is provided on dl
+  mov ah, 0x02
+  mov al, 1
+  mov ch, 0x00
+  mov cl, 0x02 ; Second sector
+  mov dh, 0x00
+  ; dl is already set after BIOS initialization
+  mov bx, end_of_bootsector
+  int 0x13
+
+  jc .disk_read_error
+.disk_read_success:
+  mov si, str_disk_success
+  call printstr
+  mov al, ':'
+  call printchar
+  mov al, ' '
+  call printchar
+  mov si, end_of_bootsector
+  call printstr
+  jmp .disk_read_finish
+.disk_read_error:
+  mov si, str_disk_error
+  call printstr
+.disk_read_finish:
+
 handle_div_zero:
   pusha
   mov si, .div_zero_message

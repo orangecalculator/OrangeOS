@@ -8,9 +8,12 @@ BOOT_RUNTIME_SIZE = DISK_SECTOR_SIZE;
 KERNEL_RUNTIME_START = 1M;
 /* KERNEL_RUNTIME_SIZE should be determined below. */
 
-DISK_BASE_ADDR = 0x80000000;
+DISK_BASE_ADDR = 0x00000000;
 DISK_BOOT_ADDR = DISK_BASE_ADDR;
 DISK_KERNEL_ADDR = DISK_BOOT_ADDR + BOOT_RUNTIME_SIZE;
+
+ASSERT(DISK_KERNEL_ADDR % DISK_SECTOR_SIZE == 0, "Kernel disk address must align by sector granularity.")
+DISK_KERNEL_ADDR_SECTOR = DISK_KERNEL_ADDR / DISK_SECTOR_SIZE;
 
 SECTIONS
 {
@@ -23,12 +26,11 @@ SECTIONS
       *(.boot)
     }
   }
-  ASSERT(. - BOOT_RUNTIME_START == BOOT_RUNTIME_SIZE, "Boot sector should be exactly 512 bytes.")
+  ASSERT(. - BOOT_RUNTIME_START == BOOT_RUNTIME_SIZE, "Boot sector size should be exactly one sector.")
 
   . = KERNEL_RUNTIME_START ;
   OVERLAY : AT(DISK_KERNEL_ADDR)
   {
-    /* . = 1M; */
     .text
     {
       *(.text)
@@ -49,6 +51,8 @@ SECTIONS
       *(COMMON)
       *(.bss)
     }
+
+    /* Note that ATA reading succeeds even if binary file is not aligned up. */
   }
   KERNEL_RUNTIME_SIZE = . - KERNEL_RUNTIME_START ;
 }
