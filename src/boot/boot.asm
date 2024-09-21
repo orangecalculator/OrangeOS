@@ -1,7 +1,9 @@
-ORG 0
+; Origin is set to 0x7c00 by the linker script.
 BITS 16
 
-%define BASE_ADDR 0x7c00
+EXTERN protected_mode_start
+
+SECTION .boot
 
   ; Actually, most of the instructions are position independent,
   ; so the origin settings will not likely matter.
@@ -31,10 +33,10 @@ times 2 + 0x3C - ($ - $$) db 0
   ; Cannot use the stack until setup is complete
   ; Note that the stack is initialized to a suitable place,
   ; but does not seem to be in standard protocol
-  jmp 0x07c0:.start_context_setup
+  jmp 0x0000:.start_context_setup
 .start_context_setup:
   cli
-  mov ax, 0x07c0
+  mov ax, 0x0000
   mov ds, ax
   mov es, ax
   mov ax, 0x0000
@@ -51,7 +53,7 @@ times 2 + 0x3C - ($ - $$) db 0
   mov cl, 0x02 ; Second sector
   mov dh, 0x00
   ; dl is already set after BIOS initialization
-  mov bx, 0x0200
+  mov bx, end_of_bootsector
   int 0x13
 
   jc .disk_read_error
@@ -102,14 +104,6 @@ protected_mode_bootstrap:
 %define CODE_SEG gdt_table_entry_code - gdt_table_start
 %define DATA_SEG gdt_table_entry_data - gdt_table_start
 
-  jmp CODE_SEG:(BASE_ADDR + protected_mode_start)
-
-BITS 32
-
-protected_mode_start:
-
-%define STACK_BASE_ADDR 0x00200000 ; 2M
-
 .setup_data_segment_selector:
   ; Setup data segment selectors here
   mov ax, DATA_SEG
@@ -118,16 +112,16 @@ protected_mode_start:
   mov fs, ax
   mov gs, ax
   mov ss, ax
-  mov ebp, STACK_BASE_ADDR
-  mov esp, ebp
 
-.enable_a20_line:
-  ; Enable the A20 line
-  in al, 0x92
-  or al, 0x02
-  out 0x92, al
+BITS 32
 
+.kernel_trampoline:
+  ; TODO: Load kernel before jump
   jmp $
+
+  jmp CODE_SEG:protected_mode_start
+
+BITS 16
 
 str_disk_success:
   db "DISK READ SUCCESS", 0
@@ -153,7 +147,7 @@ gdt_table_end:
 
 gdt_descriptor:
   dw gdt_table_end - gdt_table_start - 1 ; Subtracted by 1 due to architecture design
-  dd BASE_ADDR + gdt_table_start
+  dd gdt_table_start
 
 ; Boot signature
 times 510-($-$$) db 0
