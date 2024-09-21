@@ -136,6 +136,8 @@ ata_lba_read_simple:
   shr eax, 16
   out dx, al
 
+  mov esi, ecx
+.read_sector:
   ; Initiate read operation
   mov edx, 0x1f7
   mov al, 0x20
@@ -146,10 +148,12 @@ ata_lba_read_simple:
   test al, 0x08
   jz .wait_ready
 
-.read_sector:
   mov edx, 0x1f0
-  shl ecx, 8 ; Read in word graularity, so multiply by 256
+  mov ecx, 0x100 ; Read in word graularity, so repeat 256 times
   rep insw
+
+  dec esi
+  jne .read_sector
 
   ret
 
