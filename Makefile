@@ -13,7 +13,7 @@ AR := $(CROSS_COMPILE)ar
 AS := $(CROSS_COMPILE)as
 CC := $(CROSS_COMPILE)gcc -m32
 CXX := $(CROSS_COMPILE)g++ -m32
-LD := $(CROSS_COMPILE)ld
+LD := $(CROSS_COMPILE)ld -melf_i386
 NM := $(CROSS_COMPILE)nm
 OBJCOPY := $(CROSS_COMPILE)objcopy
 OBJDUMP := $(CROSS_COMPILE)objdump
@@ -32,11 +32,13 @@ OUT_BOOT := bin/boot.bin
 
 SRC_NASM := src/kernel.asm
 
-OBJ := $(patsubst %,build/%.o,$(SRC_NASM))
+OBJ_KERNEL := $(patsubst %,build/%.o,$(SRC_NASM))
+OUT_KERNEL := build/kernelfull.o
+
 OUT := bin/os.bin
 
 LINKER_SCRIPT := src/script.ld
-LDFLAGS += -ffreestanding -nostdlib
+LINKER_FLAGS += -ffreestanding -nostdlib
 
 .PHONY: clean all dump_boot dump_boot16 run run_gdb dump dump16
 clean:
@@ -70,9 +72,9 @@ dump: $(OUT)
 dump16: $(OUT)
 	$(OBJDUMP) -b binary -m i386 -D $< -Maddr16,data16
 
-$(OUT): $(OBJ_BOOT) $(OBJ) $(LINKER_SCRIPT)
+$(OUT): $(OBJ_BOOT) $(OUT_KERNEL) $(LINKER_SCRIPT)
 	$(MKDIR_P) $(dir $@)
-	$(CC) -T $(LINKER_SCRIPT) -o $@ $(OBJ_BOOT) $(OBJ) $(LDFLAGS)
+	$(CC) -T $(LINKER_SCRIPT) -o $@ $(OBJ_BOOT) $(OUT_KERNEL) $(LDFLAGS) $(LINKER_FLAGS)
 
 # Nasm build rule
 $(OUT_BOOT): $(OBJ_BOOT) $(FOOTER_BOOT)
@@ -80,6 +82,9 @@ $(OUT_BOOT): $(OBJ_BOOT) $(FOOTER_BOOT)
 	$(OBJCOPY) -O binary $(OBJ_BOOT) $(OUT_BOOT)
 	$(DD) if=$(FOOTER_BOOT) of=$@ bs=512 count=1 seek=1
 	$(TRUNCATE) --size=$$((2 * 512)) $@
+
+$(OUT_KERNEL): $(OBJ_KERNEL)
+	$(LD) -o $@ $^ $(LDFLAGS)
 
 build/%.asm.o: %.asm
 	$(MKDIR_P) $(dir $@)
