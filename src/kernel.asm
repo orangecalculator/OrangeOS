@@ -22,3 +22,6 @@ kernel_start:
   out 0x92, al
 
   jmp $
+
+; Align to sector granularity to avoid alignment issues
+times 511 - ($-$$+511) % 512 db 0

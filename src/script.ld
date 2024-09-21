@@ -34,22 +34,26 @@ SECTIONS
     .text
     {
       *(.text)
+      . = ALIGN(CONSTANT(COMMONPAGESIZE));
     }
 
     .rodata
     {
       *(.rodata)
+      . = ALIGN(CONSTANT(COMMONPAGESIZE));
     }
 
     .data
     {
       *(.data)
+      . = ALIGN(CONSTANT(COMMONPAGESIZE));
     }
 
     .bss
     {
       *(COMMON)
       *(.bss)
+      . = ALIGN(CONSTANT(COMMONPAGESIZE));
     }
 
     /* Note that ATA reading succeeds even if binary file is not aligned up. */
