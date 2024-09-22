@@ -99,6 +99,9 @@ run_gdb: $(OUT) $(OUT_KERNEL)
 		-ex "add-symbol-file $(OUT_KERNEL) 0x100000" \
 		-ex "set confirm on"
 
+run_gdb_server: $(OUT) $(OUT_KERNEL)
+	$(QEMU) -hda $(OUT) -s -S
+
 dump: $(OUT)
 	$(OBJDUMP) -b binary -m i386 -D $<
 
