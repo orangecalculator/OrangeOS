@@ -57,7 +57,9 @@ OBJ_BOOT := build/$(SRC_BOOT).o
 OUT_BOOT := bin/boot.bin
 
 SRC_NASM := src/kernel.asm
-SRC_C := src/kernel.c
+SRC_C := \
+	src/kernel.c \
+	src/display/terminal.c
 SRC_CXX := 
 
 OBJ_KERNEL := $(patsubst %,build/%.o,$(SRC_NASM) $(SRC_C) $(SRC_CXX))
