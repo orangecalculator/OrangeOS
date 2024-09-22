@@ -92,21 +92,53 @@ protected_mode_start:
   mov gs, ax
   mov ss, ax
 
-EXTERN KERNEL_RUNTIME_START
-EXTERN DISK_KERNEL_ADDR_SECTOR
-EXTERN KERNEL_RUNTIME_SIZE_SECTOR
+EXTERN TEXT_RUNTIME_ADDR
+EXTERN TEXT_LOAD_ADDR_SECTOR
+EXTERN TEXT_SECTION_SIZE_SECTOR
+
+EXTERN RODATA_RUNTIME_ADDR
+EXTERN RODATA_LOAD_ADDR_SECTOR
+EXTERN RODATA_SECTION_SIZE_SECTOR
+
+EXTERN DATA_RUNTIME_ADDR
+EXTERN DATA_LOAD_ADDR_SECTOR
+EXTERN DATA_SECTION_SIZE_SECTOR
+
+EXTERN BSS_RUNTIME_ADDR
+EXTERN BSS_SECTION_SIZE
 
 .load_kernel:
-  mov edi, KERNEL_RUNTIME_START
-  mov esi, DISK_KERNEL_ADDR_SECTOR
-  mov ecx, KERNEL_RUNTIME_SIZE_SECTOR
+  mov edi, TEXT_RUNTIME_ADDR
+  mov esi, TEXT_LOAD_ADDR_SECTOR
+  mov ecx, TEXT_SECTION_SIZE_SECTOR
   call ata_lba_read_simple
+
+  mov edi, RODATA_RUNTIME_ADDR
+  mov esi, RODATA_LOAD_ADDR_SECTOR
+  mov ecx, RODATA_SECTION_SIZE_SECTOR
+  call ata_lba_read_simple
+
+  mov edi, DATA_RUNTIME_ADDR
+  mov esi, DATA_LOAD_ADDR_SECTOR
+  mov ecx, DATA_SECTION_SIZE_SECTOR
+  call ata_lba_read_simple
+
+  mov edi, BSS_RUNTIME_ADDR
+  mov ecx, BSS_SECTION_SIZE
+  shr ecx, 2
+  mov eax, 0
+  rep stosd
 
 .kernel_trampoline:
   jmp kernel_start
 
 ; void ata_lba_read_simple([edi] void *buffer, [esi] unsigned long diskaddr, [ecx] uint8_t nsector)
 ata_lba_read_simple:
+  test ecx, ecx
+  jne .proceed_read
+  ret
+
+.proceed_read:
   ; Send lba[24:32]
   mov edx, 0x01f6
   mov eax, esi
