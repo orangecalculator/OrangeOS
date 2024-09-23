@@ -66,6 +66,7 @@ SRC_CXX :=
 
 OBJ_KERNEL := $(patsubst %,build/%.o,$(SRC_NASM) $(SRC_C) $(SRC_CXX))
 OUT_KERNEL := build/kernelfull.o
+OUT_KERNEL_STANDALONE := bin/kernelfulldbg
 
 OUT := bin/os.bin
 
@@ -93,15 +94,12 @@ dump_boot16: $(OUT_BOOT)
 run: $(OUT)
 	$(QEMU) -hda $<
 
-run_gdb: $(OUT) $(OUT_KERNEL)
-	$(GDB) \
+run_gdb: $(OUT)
+	$(GDB) $(OUT_KERNEL_STANDALONE) \
 		-ex "target remote | $(QEMU) -hda $(OUT) -S -gdb stdio" \
-		-ex "set architecture i386" \
-		-ex "set confirm off" \
-		-ex "add-symbol-file $(OUT_KERNEL) 0x100000" \
-		-ex "set confirm on"
+		-ex "set architecture i386"
 
-run_gdb_server: $(OUT) $(OUT_KERNEL)
+run_gdb_server: $(OUT) $(OUT_KERNEL_STANDALONE)
 	$(QEMU) -hda $(OUT) -s -S
 
 dump: $(OUT)
@@ -111,7 +109,10 @@ dump16: $(OUT)
 	$(OBJDUMP) -b binary -m i386 -D $< -Maddr16,data16
 
 dump_kernel: $(OUT_KERNEL)
-	$(OBJDUMP) -m i386 -xdsrt $(OUT_KERNEL)
+	$(OBJDUMP) -m i386 -xdsrt $<
+
+dump_kerneldbg: $(OUT_KERNEL_STANDALONE)
+	$(OBJDUMP) -m i386 -xdsrt $<
 
 $(OUT): $(OBJ_BOOT) $(OUT_KERNEL) $(LINKER_SCRIPT)
 	$(MKDIR_P) $(dir $@)
@@ -125,7 +126,12 @@ $(OUT_BOOT): $(OBJ_BOOT) $(FOOTER_BOOT)
 	$(TRUNCATE) --size=$$((2 * 512)) $@
 
 $(OUT_KERNEL): $(OBJ_KERNEL)
+	$(MKDIR_P) $(dir $@)
 	$(LD) -o $@ $^ $(LDFLAGS)
+
+$(OUT_KERNEL_STANDALONE): $(OUT_KERNEL)
+	$(MKDIR_P) $(dir $@)
+	$(LD) --oformat=elf32-i386 --defsym=NO_BOOT_SECTOR=1 -T $(LINKER_SCRIPT) -o $@ $^ $(LDFLAGS)
 
 build/%.asm.o: %.asm
 	$(MKDIR_P) $(dir $@)

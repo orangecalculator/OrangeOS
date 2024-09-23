@@ -8,6 +8,7 @@
       "type": "gdb",
       "request": "attach",
       "name": "Attach to OrangeOS gdbserver",
+      "executable": "${workspaceFolder}/OrangeOS/bin/kernelfulldbg",
       "target": ":1234",
       "remote": true,
       "cwd": "${workspaceFolder}/OrangeOS",
@@ -16,8 +17,6 @@
       "debugger_args": [
         "-ex",
         "set architecture i386",
-        "-ex",
-        "add-symbol-file build/kernelfull.o 0x100000",
       ],
     },
   ]

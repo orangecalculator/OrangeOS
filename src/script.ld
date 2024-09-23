@@ -30,7 +30,8 @@ SECTIONS
   {
     *(.boot)
   } >boot AT>rom
-  ASSERT(. - BOOT_RUNTIME_ADDR == BOOT_RUNTIME_SIZE, "Boot sector size should be exactly one sector.")
+  ASSERT(. - BOOT_RUNTIME_ADDR == BOOT_RUNTIME_SIZE || DEFINED(NO_BOOT_SECTOR),
+    "Boot sector size should be exactly one sector.")
 
   .text :
     ALIGN(CONSTANT(COMMONPAGESIZE))
