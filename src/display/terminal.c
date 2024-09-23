@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#include <display.h>
+#include <display/display.h>
 
 typedef uint16_t video_mem_entry_t;
 static inline uint16_t terminal_make_char(char c, unsigned char color) {

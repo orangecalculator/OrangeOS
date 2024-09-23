@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#include <display.h>
+#include <display/display.h>
 #include <kernel.h>
 
 void kernel_main() {
