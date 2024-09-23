@@ -1,5 +1,5 @@
-#ifndef __DISPLAY_H__
-#define __DISPLAY_H__
+#ifndef DISPLAY_H
+#define DISPLAY_H
 
 #include <base.h>
 
@@ -23,4 +23,4 @@ int terminal_print(const char *str);
 } /* extern "C" */
 #endif /* __cplusplus */
 
-#endif /* __DISPLAY_H__ */
+#endif /* DISPLAY_H */

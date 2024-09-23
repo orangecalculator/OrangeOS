@@ -1,6 +1,6 @@
-#ifndef __BASE_H__
-#define __BASE_H__
+#ifndef BASE_H
+#define BASE_H
 
 #define NULL ((void *)0)
 
-#endif /* __BASE_H__ */
+#endif /* BASE_H */

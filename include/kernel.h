@@ -1,5 +1,5 @@
-#ifndef __KERNEL_H__
-#define __KERNEL_H__
+#ifndef KERNEL_H
+#define KERNEL_H
 
 #include <base.h>
 
@@ -13,4 +13,4 @@ void kernel_main();
 } /* extern "C" */
 #endif /* __cplusplus */
 
-#endif /* __KERNEL_H__ */
+#endif /* KERNEL_H */
