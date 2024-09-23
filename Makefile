@@ -34,8 +34,8 @@ COMMONFLAGS += -ffreestanding -nostdlib -fno-builtin -nostartfiles -nodefaultlib
 # Prefer safety when compiling
 COMMONFLAGS += -falign-jumps -falign-functions -falign-labels -falign-loops \
 					-fstrength-reduce -fomit-frame-pointer -finline-functions \
-					-Wl,--orphan-handling=discard
-					# -fno-asynchronous-unwind-tables
+					-fno-asynchronous-unwind-tables
+					# -Wl,--orphan-handling=error \
 
 # Leverage compiler diagnostics
 COMMONFLAGS += -Wall -Werror -Wno-unused-functions -Wno-unused-label -Wno-cpp -Wno-unused-parameter

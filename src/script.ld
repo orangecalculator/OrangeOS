@@ -8,7 +8,6 @@ ASSERT(DISK_SECTOR_SIZE == 1 << DISK_SECTOR_SIZE_LOG2, "Disk sector size is assu
 BOOT_RUNTIME_ADDR = 0x7c00;
 BOOT_RUNTIME_SIZE = DISK_SECTOR_SIZE;
 KERNEL_RUNTIME_ADDR = 1M;
-/* KERNEL_RUNTIME_SIZE should be determined below. */
 
 DISK_BASE_ADDR = 0x00000000;
 DISK_BOOT_ADDR = DISK_BASE_ADDR;
@@ -34,24 +33,28 @@ SECTIONS
   ASSERT(. - BOOT_RUNTIME_ADDR == BOOT_RUNTIME_SIZE, "Boot sector size should be exactly one sector.")
 
   .text :
+    ALIGN(CONSTANT(COMMONPAGESIZE))
   {
     *(.text)
     . = ALIGN(CONSTANT(COMMONPAGESIZE));
   } >kernel AT>rom
 
   .rodata :
+    ALIGN(CONSTANT(COMMONPAGESIZE))
   {
     *(.rodata)
     . = ALIGN(CONSTANT(COMMONPAGESIZE));
   } >kernel AT>rom
 
   .data :
+    ALIGN(CONSTANT(COMMONPAGESIZE))
   {
     *(.data)
     . = ALIGN(CONSTANT(COMMONPAGESIZE));
   } >kernel AT>rom
 
   .bss :
+    ALIGN(CONSTANT(COMMONPAGESIZE))
   {
     *(COMMON)
     *(.bss)
@@ -59,6 +62,14 @@ SECTIONS
   } >kernel AT>rom
 
   /* Note that ATA reading succeeds even if binary file is not aligned up. */
+
+  /* This is not to include .eh_frame, but to check to make sure it does not exist. */
+  .eh_frame :
+  {
+    *(.eh_frame)
+  }
+
+  ASSERT(SIZEOF(.eh_frame) == 0, ".eh_frame should generally not be used in operating system code.")
 }
 
 TEXT_RUNTIME_ADDR = ADDR(.text);
