@@ -59,7 +59,9 @@ OUT_BOOT := bin/boot.bin
 SRC_NASM := src/kernel.asm
 SRC_C := \
 	src/kernel.c \
-	src/display/terminal.c
+	src/display/terminal.c \
+	src/idt/idt.c \
+	src/memory/memory.c
 SRC_CXX := 
 
 OBJ_KERNEL := $(patsubst %,build/%.o,$(SRC_NASM) $(SRC_C) $(SRC_CXX))
@@ -107,6 +109,9 @@ dump: $(OUT)
 
 dump16: $(OUT)
 	$(OBJDUMP) -b binary -m i386 -D $< -Maddr16,data16
+
+dump_kernel: $(OUT_KERNEL)
+	$(OBJDUMP) -m i386 -xdsrt $(OUT_KERNEL)
 
 $(OUT): $(OBJ_BOOT) $(OUT_KERNEL) $(LINKER_SCRIPT)
 	$(MKDIR_P) $(dir $@)

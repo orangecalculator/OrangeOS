@@ -1,0 +1,1 @@
+/* Currently implemented inline in <memory/memory.h> */
