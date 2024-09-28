@@ -8,7 +8,7 @@
       "type": "gdb",
       "request": "attach",
       "name": "Attach to OrangeOS gdbserver",
-      "executable": "${workspaceFolder}/OrangeOS/bin/kernelfulldbg",
+      "executable": "${workspaceFolder}/OrangeOS/bin/os.elf",
       "target": ":1234",
       "remote": true,
       "cwd": "${workspaceFolder}/OrangeOS",

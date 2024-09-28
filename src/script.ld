@@ -27,6 +27,7 @@ SECTIONS
 {
 
   .boot :
+    ALIGN(DISK_SECTOR_SIZE)
   {
     *(.boot)
   } >boot AT>rom

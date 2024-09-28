@@ -3,7 +3,7 @@ BITS 16
 
 EXTERN kernel_start
 
-SECTION .boot
+SECTION .boot progbits alloc exec nowrite align=16
 
   ; Actually, most of the instructions are position independent,
   ; so the origin settings will not likely matter.

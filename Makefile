@@ -66,8 +66,8 @@ SRC_CXX :=
 
 OBJ_KERNEL := $(patsubst %,build/%.o,$(SRC_NASM) $(SRC_C) $(SRC_CXX))
 OUT_KERNEL := build/kernelfull.o
-OUT_KERNEL_STANDALONE := bin/kernelfulldbg
 
+OUT_ELF := bin/os.elf
 OUT := bin/os.bin
 
 LINKER_SCRIPT := src/script.ld
@@ -76,14 +76,7 @@ LINKER_SCRIPT := src/script.ld
 clean:
 	$(RM) bin/ build/
 
-all: $(OUT)
-
-run_boot: $(OUT_BOOT)
-	$(QEMU) -hda $<
-
-run_gdb_boot: $(OUT_BOOT)
-	$(GDB) \
-		-ex "target remote | $(QEMU) -hda $< -S -gdb stdio"
+all: $(OUT) $(OUT_ELF)
 
 dump_boot: $(OUT_BOOT)
 	$(OBJDUMP) -b binary -m i386 -D $<
@@ -94,29 +87,30 @@ dump_boot16: $(OUT_BOOT)
 run: $(OUT)
 	$(QEMU) -hda $<
 
-run_gdb: $(OUT)
-	$(GDB) $(OUT_KERNEL_STANDALONE) \
+run_gdb: $(OUT) $(OUT_ELF)
+	$(GDB) $(OUT_ELF) \
 		-ex "target remote | $(QEMU) -hda $(OUT) -S -gdb stdio" \
 		-ex "set architecture i386"
 
-run_gdb_server: $(OUT) $(OUT_KERNEL_STANDALONE)
+run_gdb_server: $(OUT)
 	$(QEMU) -hda $(OUT) -s -S
 
-dump: $(OUT)
-	$(OBJDUMP) -b binary -m i386 -D $<
+dump: $(OUT_ELF)
+	$(OBJDUMP) -xdsrt $<
 
-dump16: $(OUT)
-	$(OBJDUMP) -b binary -m i386 -D $< -Maddr16,data16
+dump16: $(OUT_ELF)
+	$(OBJDUMP) -xdsrt $< -Maddr16,data16
 
 dump_kernel: $(OUT_KERNEL)
-	$(OBJDUMP) -m i386 -xdsrt $<
-
-dump_kerneldbg: $(OUT_KERNEL_STANDALONE)
 	$(OBJDUMP) -m i386 -xdsrt $<
 
 $(OUT): $(OBJ_BOOT) $(OUT_KERNEL) $(LINKER_SCRIPT)
 	$(MKDIR_P) $(dir $@)
 	$(CC) -T $(LINKER_SCRIPT) -o $@ $(OBJ_BOOT) $(OUT_KERNEL) $(CFLAGS)
+
+$(OUT_ELF): $(OBJ_BOOT) $(OUT_KERNEL) $(LINKER_SCRIPT)
+	$(MKDIR_P) $(dir $@)
+	$(CC) -Wl,--oformat=elf32-i386 -T $(LINKER_SCRIPT) -o $@ $(OBJ_BOOT) $(OUT_KERNEL) $(CFLAGS)
 
 # Nasm build rule
 $(OUT_BOOT): $(OBJ_BOOT) $(FOOTER_BOOT)
@@ -128,10 +122,6 @@ $(OUT_BOOT): $(OBJ_BOOT) $(FOOTER_BOOT)
 $(OUT_KERNEL): $(OBJ_KERNEL)
 	$(MKDIR_P) $(dir $@)
 	$(LD) -o $@ $^ $(LDFLAGS)
-
-$(OUT_KERNEL_STANDALONE): $(OUT_KERNEL)
-	$(MKDIR_P) $(dir $@)
-	$(LD) --oformat=elf32-i386 --defsym=NO_BOOT_SECTOR=1 -T $(LINKER_SCRIPT) -o $@ $^ $(LDFLAGS)
 
 build/%.asm.o: %.asm
 	$(MKDIR_P) $(dir $@)
