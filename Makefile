@@ -60,9 +60,11 @@ SRC_NASM := src/kernel.asm
 SRC_C := \
 	src/kernel.c \
 	src/display/terminal.c \
-	src/idt/idt.c \
 	src/memory/memory.c
 SRC_CXX := 
+
+SRC_NASM += src/idt/idt.asm
+SRC_C += src/idt/idt.c
 
 OBJ_KERNEL := $(patsubst %,build/%.o,$(SRC_NASM) $(SRC_C) $(SRC_CXX))
 OUT_KERNEL := build/kernelfull.o
@@ -92,7 +94,7 @@ run_gdb: $(OUT) $(OUT_ELF)
 		-ex "target remote | $(QEMU) -hda $(OUT) -S -gdb stdio" \
 		-ex "set architecture i386"
 
-run_gdb_server: $(OUT)
+run_gdb_server: $(OUT) $(OUT_ELF)
 	$(QEMU) -hda $(OUT) -s -S
 
 dump: $(OUT_ELF)
