@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdint.h>
 
 #include <display/display.h>
@@ -13,16 +14,22 @@ static inline uint16_t terminal_make_char(char c, unsigned char color) {
  */
 #define VIDEO_MEM ((video_mem_entry_t *)0xB8000)
 #define VIDEO_WIDTH 80
-#define VIDEO_HEIGHT 20
+#define VIDEO_HEIGHT 25
 
 struct terminal_t {
   unsigned int x;
   unsigned int y;
 };
 
-static struct terminal_t terminal_state;
+static inline bool terminal_state_writable(const struct terminal_t *state) {
+  if (state == NULL)
+    return false;
 
-// char unused_data[4 << 20] = {1, 0};
+  return (0 <= state->x && state->x < VIDEO_WIDTH && 0 <= state->y &&
+          state->y < VIDEO_HEIGHT);
+}
+
+static struct terminal_t terminal_state;
 
 void terminal_init() {
   for (unsigned int y = 0; y < VIDEO_HEIGHT; ++y) {
@@ -51,6 +58,11 @@ static inline void terminal_putchar_raw(char c, unsigned char color) {
 }
 
 int terminal_putchar_color(char c, unsigned char color) {
+
+  /* Just ignore input if terminal is not in writable state for now. */
+  if (!terminal_state_writable(&terminal_state))
+    return -1;
+
   switch (c) {
   case '\r':
     terminal_state.x = 0;
@@ -93,3 +105,47 @@ int terminal_print(const char *str) {
   return terminal_print_color_cb(terminal_putchar_color, str,
                                  TERMINAL_COLOR_DEFAULT);
 }
+
+// static inline void __mock_x86_outb(unsigned short port, unsigned char val) {
+//   char buf[0x100] = "outb: ";
+//   size_t count = 6;
+
+//   const char HEX_CHARS[0x10] = "0123456789ABCDEF";
+
+//   buf[count++] = HEX_CHARS[(port >> 12) & 0xf];
+//   buf[count++] = HEX_CHARS[(port >> 8) & 0xf];
+//   buf[count++] = HEX_CHARS[(port >> 4) & 0xf];
+//   buf[count++] = HEX_CHARS[(port >> 0) & 0xf];
+//   buf[count++] = ' ';
+//   buf[count++] = HEX_CHARS[(val >> 4) & 0xf];
+//   buf[count++] = HEX_CHARS[(val >> 0) & 0xf];
+//   buf[count++] = '\n';
+
+//   terminal_print(buf);
+
+//   x86_outb(port, val);
+// }
+// static inline unsigned char __mock_x86_inb(unsigned short port) {
+//   unsigned char val = x86_inb(port);
+
+//   char buf[0x100] = "inb: ";
+//   size_t count = 5;
+
+//   const char HEX_CHARS[0x10] = "0123456789ABCDEF";
+
+//   buf[count++] = HEX_CHARS[(port >> 12) & 0xf];
+//   buf[count++] = HEX_CHARS[(port >> 8) & 0xf];
+//   buf[count++] = HEX_CHARS[(port >> 4) & 0xf];
+//   buf[count++] = HEX_CHARS[(port >> 0) & 0xf];
+//   buf[count++] = ' ';
+//   buf[count++] = '-';
+//   buf[count++] = '>';
+//   buf[count++] = ' ';
+//   buf[count++] = HEX_CHARS[(val >> 4) & 0xf];
+//   buf[count++] = HEX_CHARS[(val >> 0) & 0xf];
+//   buf[count++] = '\n';
+
+//   terminal_print(buf);
+
+//   return val;
+// }
