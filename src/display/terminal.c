@@ -45,6 +45,20 @@ void terminal_init() {
 static inline void terminal_linebreak() {
   terminal_state.y++;
   terminal_state.x = 0;
+
+  if (terminal_state.y < 0 || terminal_state.y >= 2 * VIDEO_HEIGHT - 1)
+    return terminal_init();
+  else if (terminal_state.y >= VIDEO_HEIGHT) {
+    int nbreak = terminal_state.y - (VIDEO_HEIGHT - 1);
+
+    for (int i = 0; i < VIDEO_WIDTH * (VIDEO_HEIGHT - nbreak); ++i)
+      VIDEO_MEM[i] = VIDEO_MEM[i + (VIDEO_WIDTH * nbreak)];
+    for (int i = VIDEO_WIDTH * (VIDEO_HEIGHT - nbreak);
+         i < VIDEO_WIDTH * VIDEO_HEIGHT; ++i)
+      VIDEO_MEM[i] = terminal_make_char(' ', 0);
+
+    terminal_state.y -= nbreak;
+  }
 }
 
 static inline void terminal_putchar_raw(char c, unsigned char color) {
