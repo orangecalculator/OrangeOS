@@ -38,6 +38,7 @@ SECTIONS
     ALIGN(CONSTANT(COMMONPAGESIZE))
   {
     *(.text)
+    *(.text.*)
     . = ALIGN(CONSTANT(COMMONPAGESIZE));
   } >kernel AT>rom
 

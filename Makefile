@@ -59,9 +59,16 @@ OUT_BOOT := bin/boot.bin
 SRC_NASM := src/kernel.asm
 SRC_C := \
 	src/kernel.c \
-	src/display/terminal.c \
 	src/memory/memory.c
 SRC_CXX := 
+
+SRC_C += src/display/terminal.c
+SRC_CXX += src/display/vcbprintf.cpp
+
+ifeq ($(TEST_VCBPRINTF),y)
+COMMONFLAGS += -DTEST_VCBPRINTF -Itest
+SRC_CXX += test/display/vcbprintf_test.cpp
+endif
 
 SRC_NASM += src/idt/idt.asm
 SRC_C += src/idt/idt.c
@@ -102,6 +109,9 @@ dump: $(OUT_ELF)
 
 dump16: $(OUT_ELF)
 	$(OBJDUMP) -xdsrt $< -Maddr16,data16
+
+dump_bin: $(OUT)
+	$(OBJDUMP) -b binary -m i386 -D $<
 
 dump_kernel: $(OUT_KERNEL)
 	$(OBJDUMP) -m i386 -xdsrt $<

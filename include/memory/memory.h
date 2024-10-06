@@ -33,6 +33,52 @@ static inline void *kmemset(void *mem, int value, size_t size) {
   return mem;
 }
 
+/**
+ * @brief Simple implementation of memcpy with x86 specific functionality.
+ *
+ * @param dst Memory address to copy to.
+ * @param src Memory address to copy from.
+ * @param size Size of memory region to copy values.
+ * @return void* The value of dst is returned as is.
+ */
+static inline void *kmemcpy(void *dst, const void *src, size_t size) {
+  // #if defined(__GNUC__) || defined(__clang__)
+  //   __asm__ inline("rep movsb"
+  //                  :
+  //                  /* ecx */ "+c"(size)
+  //                  : /* edi */ "D"(dst),
+  //                    /* eax */ "S"(src)
+  //                  : "memory");
+  // #else
+  char *__dst = (char *)dst;
+  char *__src = (char *)src;
+  for (size_t i = 0; i < size; ++i) {
+    __dst[i] = __src[i];
+  }
+  // #endif
+
+  return dst;
+}
+
+/**
+ * @brief Simple implementation of memcmp with x86 specific functionality.
+ *
+ * @param dst Memory address to compare to.
+ * @param src Memory address to compare from.
+ * @param size Size of memory region to copy values.
+ * @return int The difference of the first different byte is returned.
+ */
+static inline int kmemcmp(const void *dst, const void *src, size_t size) {
+  char *__dst = (char *)dst;
+  char *__src = (char *)src;
+  for (size_t i = 0; i < size; ++i) {
+    if (__dst[i] != __src[i])
+      return (int)__dst[i] - (int)__src[i];
+  }
+
+  return 0;
+}
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif /* __cplusplus */

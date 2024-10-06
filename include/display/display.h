@@ -19,6 +19,8 @@ static inline int terminal_putchar(char c) {
 
 int terminal_print(const char *str);
 
+PRINTFLIKE(1, 2) int terminal_printk(const char *fmt, ...);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif /* __cplusplus */

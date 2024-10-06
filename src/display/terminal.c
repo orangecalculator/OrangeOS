@@ -1,7 +1,9 @@
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 #include <display/display.h>
+#include <display/format.h>
 
 typedef uint16_t video_mem_entry_t;
 static inline uint16_t terminal_make_char(char c, unsigned char color) {
@@ -118,6 +120,31 @@ terminal_print_color_cb(int (*putchar_color_cb)(char c, unsigned char color),
 int terminal_print(const char *str) {
   return terminal_print_color_cb(terminal_putchar_color, str,
                                  TERMINAL_COLOR_DEFAULT);
+}
+
+static inline void terminal_putchar_default_color_cb(void *ctx, char c) {
+  int ret = terminal_putchar_color(c, TERMINAL_COLOR_DEFAULT);
+  if (ret != 0) {
+    if (ctx != NULL) {
+      /* Save the first error. */
+      int *ictx = (int *)ctx;
+      if (*ictx == 0)
+        *ictx = ret;
+    }
+  }
+}
+
+int terminal_printk(const char *fmt, ...) {
+  int ret = 0, pret = 0;
+  va_list args;
+
+  va_start(args, fmt);
+
+  ret = vcbprintf(terminal_putchar_default_color_cb, (void *)&pret, fmt, args);
+
+  va_end(args);
+
+  return (ret || pret);
 }
 
 // static inline void __mock_x86_outb(unsigned short port, unsigned char val) {
