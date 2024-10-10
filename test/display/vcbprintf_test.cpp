@@ -123,5 +123,7 @@ private:
 void vcbprintf_test() {
   vcbprintf_test_worker test;
 
+  terminal_print("vcbprintf_test enabled.\n");
   test.test("%%", "%%");
+  terminal_print("vcbprintf_test finished.\n");
 }

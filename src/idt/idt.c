@@ -217,7 +217,7 @@ void irq_handler_timer() {
   static int log_count = 0;
 
   if (log_count < IRQ_TIMER_LOG_COUNT_MAX) {
-    terminal_print(".");
+    terminal_printk("timer interrupt: %d\n", log_count);
     log_count++;
   } else if (log_count == IRQ_TIMER_LOG_COUNT_MAX) {
     terminal_print(

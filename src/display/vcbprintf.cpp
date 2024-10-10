@@ -1,5 +1,9 @@
+#include <limits.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <wctype.h>
+
+#include <sys/types.h>
 
 #include <limits>
 #include <type_traits>
@@ -12,7 +16,7 @@ constexpr int PRINT_CONVERSION_FLAG_SPACEPREPEND = (1 << 2);
 constexpr int PRINT_CONVERSION_FLAG_ALTFORMAT = (1 << 3);
 constexpr int PRINT_CONVERSION_FLAG_ZEROPADDING = (1 << 4);
 constexpr int PRINT_CONVERSION_FLAG_MINWIDTH = (1 << 5);
-constexpr int PRINT_CONVERSION_FLAG_PRECISION = (1 < 6);
+constexpr int PRINT_CONVERSION_FLAG_PRECISION = (1 << 6);
 
 enum LengthModifier {
   hh,
@@ -63,7 +67,21 @@ public:
     }
   }
 
-  static constexpr char tochar(int x, int radix, bool capital) {
+  void PutDecimalInt(intmax_t x, int flags, unsigned int minwidth,
+                     unsigned int precision) {
+    return PutIntImpl<intmax_t, 10, false>(x, flags, minwidth, precision);
+  }
+
+  void PutHexadecimalInt(intmax_t x, int flags, unsigned int minwidth,
+                         unsigned int precision) {
+    return PutIntImpl<intmax_t, 16, false>(x, flags, minwidth, precision);
+  }
+
+  size_t GetWrittenLength() const { return written_len; }
+
+protected:
+  static constexpr char tochar(unsigned int x, unsigned int radix,
+                               bool capital) {
     if (x < 10)
       return (char)('0' + x);
     else
@@ -71,32 +89,138 @@ public:
   }
 
   template <typename IntType, unsigned int Radix, bool Capital>
-  void PutInt(IntType x, int flags, int minwidth, int precision) {
-    if constexpr (std::is_signed<IntType>::value) {
-      constexpr size_t BUFSIZE = 32;
-      for (IntType val : {std::numeric_limits<IntType>::max(),
-                          std::numeric_limits<IntType>::min()}) {
-        for (unsigned int i = 0; i < BUFSIZE - 1; ++i)
-          val /= Radix;
-        static_assert(val == 0);
-      }
+  void PutIntImpl(IntType x, int flags, unsigned int minwidth,
+                  unsigned int precision) {
 
-      char buf[BUFSIZE] = {};
-      size_t len = 0;
+    if (!(flags & PRINT_CONVERSION_FLAG_MINWIDTH))
+      minwidth = 0;
 
+    if (!(flags & PRINT_CONVERSION_FLAG_PRECISION))
+      precision = 1;
+
+    /* Determine prefix. */
+    char prefix[16] = {};
+    size_t prefix_len = 0;
+
+    if (x < 0) {
+      prefix[prefix_len++] = '-';
+      x = -x;
+    } else if (flags & PRINT_CONVERSION_FLAG_SIGNPREPEND) {
+      prefix[prefix_len++] = '+';
+    } else if (flags & PRINT_CONVERSION_FLAG_SPACEPREPEND) {
+      prefix[prefix_len++] = ' ';
+    }
+
+    /* Number to string. */
+    constexpr size_t BUFSIZE = CHAR_BIT * sizeof(IntType);
+
+    /* The number of bits in the type would be sufficient here. */
+    char valstr[BUFSIZE] = {};
+    size_t valstrlen = 0;
+
+    {
+      /**
+       * This may be calculated using the actual type,
+       * but is done by long to support types larger than native values.
+       *
+       * Caution: the numbers are reversed at this point. 
+       * When printing. the characters should be printed in reverse order.
+       */
+
+      using BaseIntType = unsigned long;
+
+      static_assert(std::is_unsigned<BaseIntType>::value);
+
+      constexpr size_t NWORD =
+          (sizeof(IntType) + sizeof(BaseIntType) - 1) / sizeof(BaseIntType);
+      static_assert(std::numeric_limits<BaseIntType>::max() > Radix * Radix);
+      constexpr size_t BITS_IN_WORD = CHAR_BIT * sizeof(BaseIntType);
+      constexpr BaseIntType WORD_MASK = ~static_cast<BaseIntType>(0);
+
+      constexpr BaseIntType FULL_WORD_DIV =
+          WORD_MASK / Radix + (WORD_MASK % Radix + 1 >= Radix ? 1 : 0);
+      constexpr BaseIntType FULL_WORD_REM = (WORD_MASK % Radix + 1) % Radix;
+
+      unsigned long word[NWORD];
       {
         IntType cur = x;
-        do {
-          buf[len++] = tochar(cur % Radix, Radix, Capital);
-          cur /= Radix;
-        } while (cur != 0);
+        for (unsigned int k = 0; k < NWORD; ++k) {
+          word[NWORD - 1 - k] = (cur & WORD_MASK);
+          cur >>= BITS_IN_WORD;
+        }
       }
 
-    } else {
-    }
-  }
+      while (true) {
+        bool iszero = true;
+        for (unsigned int k = 0; k < NWORD; ++k) {
+          if (word[k] != 0) {
+            iszero = false;
+          }
+        }
 
-  size_t GetWrittenLength() const { return written_len; }
+        if (iszero)
+          break;
+
+        BaseIntType rem = 0;
+        for (unsigned int k = 0; k < NWORD; ++k) {
+          BaseIntType nextrem = word[k] % Radix + rem * FULL_WORD_REM;
+          word[k] = word[k] / Radix + rem * FULL_WORD_DIV + nextrem / Radix;
+          rem = nextrem % Radix;
+        }
+
+        valstr[valstrlen++] = tochar((unsigned int)rem, Radix, Capital);
+      }
+    }
+
+    /**
+      * Alternative format is implementation defined for other specifiers.
+      * Here, we choose to just ignore it.
+      */
+    if constexpr (Radix == 0x10) {
+      if ((flags & PRINT_CONVERSION_FLAG_ALTFORMAT) && (x != 0)) {
+        prefix[prefix_len++] = '0';
+        prefix[prefix_len++] = (Capital ? 'x' : 'X');
+      }
+    }
+
+    /* Determine padding. */
+    size_t zeropad = 0;
+
+    if (flags & PRINT_CONVERSION_FLAG_PRECISION) {
+      /**
+       * The precision is already determined,
+       * but whether it was explicit or implicit matters here.
+       */
+      if (precision > valstrlen)
+        zeropad = precision - valstrlen;
+    } else if (flags & PRINT_CONVERSION_FLAG_LEFTADJUST) {
+      if (1 > valstrlen)
+        zeropad = 1 - valstrlen;
+    } else if (flags & PRINT_CONVERSION_FLAG_ZEROPADDING) {
+      if ((flags & PRINT_CONVERSION_FLAG_MINWIDTH) &&
+          minwidth > prefix_len + valstrlen) {
+        zeropad = minwidth - (prefix_len + valstrlen);
+      }
+    } else {
+      if (precision > valstrlen)
+        zeropad = precision - valstrlen;
+    }
+
+    if constexpr (Radix == 8) {
+      if ((flags & PRINT_CONVERSION_FLAG_ALTFORMAT) && (zeropad < 1)) {
+        zeropad = 1;
+      }
+    }
+
+    for (size_t i = 0; i < prefix_len; ++i)
+      PutChar(prefix[i]);
+
+    for (size_t i = 0; i < zeropad; ++i)
+      PutChar('0');
+
+    for (size_t i = 0; i < valstrlen; ++i)
+      PutChar(valstr[valstrlen - 1 - i]);
+  }
 
 private:
   size_t written_len = 0;
@@ -107,14 +231,14 @@ private:
 
 namespace {
 static inline constexpr bool isdigit(char c) { return ('0' <= c && c <= '9'); }
-static inline constexpr int appenddigit(int x, char c) {
-  if (x < 0 || x > std::numeric_limits<int>::max() / 10)
+static inline constexpr unsigned int appenddigit(unsigned int x, char c) {
+  if (x > std::numeric_limits<unsigned int>::max() / 10)
     return -1;
   else {
     int cadd = c - '0';
 
     x = x * 10;
-    if (x > std::numeric_limits<int>::max() - cadd)
+    if (x > std::numeric_limits<unsigned int>::max() - cadd)
       return -1;
     return x + cadd;
   }
@@ -122,8 +246,8 @@ static inline constexpr int appenddigit(int x, char c) {
 
 struct PrintConversionFlag {
   int flags = 0;
-  int minwidth = 0;
-  int precision = 0;
+  unsigned int minwidth = 0;
+  unsigned int precision = 0;
   LengthModifier modifier = LengthModifier::NONE;
 
   void AppendFlag(int flag) { flags |= flags; }
@@ -186,10 +310,11 @@ int vcbprintf(format_putc_cb _cb, void *_cb_ctx, const char *fmt,
       flags.AppendFlag(PRINT_CONVERSION_FLAG_MINWIDTH);
 
       int w = va_arg(args, int);
-      if (w < 0)
+      if (w < 0) {
         flags.AppendFlag(PRINT_CONVERSION_FLAG_LEFTADJUST);
-      w = -w;
-      flags.minwidth = w;
+        w = -w;
+      }
+      flags.minwidth = static_cast<unsigned int>(w);
       c = *++fmt;
     }
 
@@ -211,6 +336,9 @@ int vcbprintf(format_putc_cb _cb, void *_cb_ctx, const char *fmt,
         if (p >= 0)
           flags.precision = p;
         c = *++fmt;
+      } else {
+        /* The default precision is 0 in this case. */
+        flags.precision = 0;
       }
     }
 
@@ -256,7 +384,6 @@ int vcbprintf(format_putc_cb _cb, void *_cb_ctx, const char *fmt,
       if (flags.flags != 0 || flags.modifier != LengthModifier::NONE)
         return -1;
       formatter.PutChar('%');
-      fmt++;
     } break;
 
     case 'c': {
@@ -287,10 +414,45 @@ int vcbprintf(format_putc_cb _cb, void *_cb_ctx, const char *fmt,
       }
     } break;
 
+    case 'd': {
+      intmax_t x;
+      switch (flags.modifier) {
+      case LengthModifier::NONE:
+        x = va_arg(args, int);
+        break;
+      case LengthModifier::hh:
+        x = (signed char)va_arg(args, int);
+        break;
+      case LengthModifier::h:
+        x = (short)va_arg(args, int);
+        break;
+      case LengthModifier::l:
+        x = va_arg(args, long);
+        break;
+      case LengthModifier::ll:
+        x = va_arg(args, long long);
+        break;
+      case LengthModifier::j:
+        x = va_arg(args, intmax_t);
+        break;
+      case LengthModifier::z:
+        x = va_arg(args, ssize_t);
+        break;
+      case LengthModifier::t:
+        x = va_arg(args, ptrdiff_t);
+        break;
+      default:
+        return -1;
+      }
+      formatter.PutDecimalInt(x, flags.flags, flags.minwidth, flags.precision);
+    } break;
+
     /* Not implemented. */
     default:
       return -1;
     }
+
+    fmt++;
   }
 
   return 0;
