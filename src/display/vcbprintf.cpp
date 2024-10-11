@@ -212,6 +212,15 @@ protected:
       }
     }
 
+    size_t pad = (minwidth > prefix_len + zeropad + valstrlen
+                      ? minwidth - (prefix_len + zeropad + valstrlen)
+                      : 0);
+
+    if (!(flags & PRINT_CONVERSION_FLAG_LEFTADJUST)) {
+      for (size_t i = 0; i < pad; ++i)
+        PutChar(' ');
+    }
+
     for (size_t i = 0; i < prefix_len; ++i)
       PutChar(prefix[i]);
 
@@ -220,6 +229,11 @@ protected:
 
     for (size_t i = 0; i < valstrlen; ++i)
       PutChar(valstr[valstrlen - 1 - i]);
+
+    if (flags & PRINT_CONVERSION_FLAG_LEFTADJUST) {
+      for (size_t i = 0; i < pad; ++i)
+        PutChar(' ');
+    }
   }
 
 private:
@@ -250,7 +264,7 @@ struct PrintConversionFlag {
   unsigned int precision = 0;
   LengthModifier modifier = LengthModifier::NONE;
 
-  void AppendFlag(int flag) { flags |= flags; }
+  void AppendFlag(int flag) { flags |= flag; }
   void AppendMinWidth(char c) { minwidth = appenddigit(minwidth, c); }
   void AppendPrecision(char c) { precision = appenddigit(precision, c); }
 };
