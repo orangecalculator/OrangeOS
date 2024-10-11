@@ -57,12 +57,6 @@ public:
     }
   }
 
-  static void print_worker_error(int ret) {
-    terminal_print("vcbprintf test worker error ");
-    print_integer_raw(ret);
-    terminal_putchar('\n');
-  }
-
   void test(const char *expect, const char *fmt, ...) {
     int ret;
     va_list args;
@@ -76,7 +70,9 @@ public:
     va_end(args);
 
     if (ret) {
-      print_worker_error(ret);
+      terminal_print("vcbprintf test worker error ");
+      print_integer_raw(ret);
+      terminal_putchar('\n');
       return;
     }
 
@@ -98,11 +94,15 @@ public:
       }
 
       if (ret) {
-        print_worker_error(ret);
+        terminal_print("vcbprintf test worker expected from format |");
+        terminal_print(fmt);
+        terminal_print("| but got\n");
 
+        terminal_print("expect: ");
         terminal_print(expect);
         terminal_putchar('\n');
 
+        terminal_print("actual: ");
         terminal_print(buffer.get_buf());
         terminal_putchar('\n');
       }
