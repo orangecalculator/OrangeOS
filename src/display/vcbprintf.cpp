@@ -430,7 +430,8 @@ int vcbprintf(format_putc_cb _cb, void *_cb_ctx, const char *fmt,
       }
     } break;
 
-    case 'd': {
+    case 'd':
+    case 'i': {
       intmax_t x;
       switch (flags.modifier) {
       case LengthModifier::NONE:
