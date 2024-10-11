@@ -201,6 +201,8 @@ protected:
           minwidth > prefix_len + valstrlen) {
         zeropad = minwidth - (prefix_len + valstrlen);
       }
+      if (precision > valstrlen + zeropad)
+        zeropad = precision - valstrlen;
     } else {
       if (precision > valstrlen)
         zeropad = precision - valstrlen;
