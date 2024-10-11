@@ -45,29 +45,22 @@ static inline void append_char(void *_ctx, char c) {
 
 class vcbprintf_test_worker {
 public:
-  static void print_error(int ret) {
-    constexpr char errstr[] = "vcbprintf test worker error";
-
-    char retbuf[sizeof(errstr) + 32] = "";
-    size_t retbuflen = sizeof(errstr) - 1;
-
-    kmemcpy(retbuf, errstr, sizeof(errstr) - 1);
-
-    retbuf[retbuflen++] = ' ';
-
-    if (ret < 0) {
-      retbuf[retbuflen++] = '-';
-      ret = -ret;
+  static void print_integer_raw(int value) {
+    if (value < 0) {
+      terminal_putchar('-');
+      value = -value;
     }
 
-    for (int k = 0; ret != 0 && k < 16; ++k) {
-      retbuf[retbuflen++] = (char)('0' + ret % 10);
-      ret /= 10;
+    for (int k = 0; value != 0 && k < 16; ++k) {
+      terminal_putchar((char)('0' + value % 10));
+      value /= 10;
     }
+  }
 
-    retbuf[retbuflen++] = '\n';
-
-    terminal_print(retbuf);
+  static void print_worker_error(int ret) {
+    terminal_print("vcbprintf test worker error ");
+    print_integer_raw(ret);
+    terminal_putchar('\n');
   }
 
   void test(const char *expect, const char *fmt, ...) {
@@ -83,7 +76,7 @@ public:
     va_end(args);
 
     if (ret) {
-      print_error(ret);
+      print_worker_error(ret);
       return;
     }
 
@@ -105,7 +98,7 @@ public:
       }
 
       if (ret) {
-        print_error(ret);
+        print_worker_error(ret);
 
         terminal_print(expect);
         terminal_putchar('\n');
@@ -113,6 +106,36 @@ public:
         terminal_print(buffer.get_buf());
         terminal_putchar('\n');
       }
+    }
+  }
+
+  void test_error(int ret_expect, const char *fmt, ...) {
+    int ret;
+    va_list args;
+
+    buffer.clear();
+
+    va_start(args, fmt);
+
+    ret = vcbprintf(append_char, &buffer, fmt, args);
+
+    va_end(args);
+
+    if (!ret) {
+      terminal_print("vcbprintf test worker expected error ");
+      print_integer_raw(ret_expect);
+      terminal_print(" but got success: ");
+      terminal_print(buffer.get_buf());
+      terminal_putchar('\n');
+      return;
+    }
+
+    if (ret != ret_expect) {
+      terminal_print("vcbprintf test worker epxected error ");
+      print_integer_raw(ret_expect);
+      terminal_print(" but got error ");
+      print_integer_raw(ret);
+      terminal_putchar('\n');
     }
   }
 
@@ -125,5 +148,6 @@ void vcbprintf_test() {
 
   terminal_print("vcbprintf_test enabled.\n");
   test.test("%%", "%%");
+  test.test_error(-5, "%%");
   terminal_print("vcbprintf_test finished.\n");
 }
