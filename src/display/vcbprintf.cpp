@@ -72,9 +72,22 @@ public:
     return PutIntImpl<intmax_t, 10, false>(x, flags, minwidth, precision);
   }
 
-  void PutHexadecimalInt(intmax_t x, int flags, unsigned int minwidth,
+  void PutDecimalUInt(uintmax_t x, int flags, unsigned int minwidth,
+                      unsigned int precision) {
+    return PutIntImpl<uintmax_t, 10, false>(x, flags, minwidth, precision);
+  }
+
+  void PutOctalUInt(uintmax_t x, int flags, unsigned int minwidth,
                          unsigned int precision) {
-    return PutIntImpl<intmax_t, 16, false>(x, flags, minwidth, precision);
+    return PutIntImpl<uintmax_t, 8, false>(x, flags, minwidth, precision);
+  }
+
+  void PutHexadecimalUInt(bool capital, uintmax_t x, int flags,
+                          unsigned int minwidth, unsigned int precision) {
+    if (capital)
+      return PutIntImpl<uintmax_t, 16, true>(x, flags, minwidth, precision);
+    else
+      return PutIntImpl<uintmax_t, 16, false>(x, flags, minwidth, precision);
   }
 
   size_t GetWrittenLength() const { return written_len; }
@@ -102,7 +115,9 @@ protected:
     char prefix[16] = {};
     size_t prefix_len = 0;
 
-    if (x < 0) {
+    if (std::is_unsigned<IntType>::value) {
+      /* Sign is printed only for signed conversions. */
+    } else if (x < 0) {
       prefix[prefix_len++] = '-';
       x = -x;
     } else if (flags & PRINT_CONVERSION_FLAG_SIGNPREPEND) {
@@ -462,6 +477,59 @@ int vcbprintf(format_putc_cb _cb, void *_cb_ctx, const char *fmt,
         return -1;
       }
       formatter.PutDecimalInt(x, flags.flags, flags.minwidth, flags.precision);
+    } break;
+
+    case 'o':
+    case 'x':
+    case 'X':
+    case 'u': {
+      char specifier = c;
+      uintmax_t x;
+      switch (flags.modifier) {
+      case LengthModifier::NONE:
+        x = va_arg(args, unsigned int);
+        break;
+      case LengthModifier::hh:
+        x = (unsigned char)va_arg(args, unsigned int);
+        break;
+      case LengthModifier::h:
+        x = (unsigned short)va_arg(args, unsigned int);
+        break;
+      case LengthModifier::l:
+        x = va_arg(args, unsigned long);
+        break;
+      case LengthModifier::ll:
+        x = va_arg(args, unsigned long long);
+        break;
+      case LengthModifier::j:
+        x = va_arg(args, uintmax_t);
+        break;
+      case LengthModifier::z:
+        x = va_arg(args, size_t);
+        break;
+      case LengthModifier::t:
+        x = va_arg(args, std::make_unsigned<ptrdiff_t>::type);
+        break;
+      default:
+        return -1;
+      }
+      switch (specifier) {
+      case 'o':
+        formatter.PutOctalUInt(x, flags.flags, flags.minwidth, flags.precision);
+        break;
+      case 'x':
+        formatter.PutHexadecimalUInt(false, x, flags.flags, flags.minwidth,
+                                     flags.precision);
+        break;
+      case 'X':
+        formatter.PutHexadecimalUInt(true, x, flags.flags, flags.minwidth,
+                                     flags.precision);
+        break;
+      case 'u':
+        formatter.PutDecimalUInt(x, flags.flags, flags.minwidth,
+                                 flags.precision);
+        break;
+      }
     } break;
 
     /* Not implemented. */
