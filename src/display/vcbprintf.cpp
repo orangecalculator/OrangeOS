@@ -336,7 +336,7 @@ int vcbprintf(format_putc_cb _cb, void *_cb_ctx, const char *fmt,
       flags.AppendFlag(PRINT_CONVERSION_FLAG_PRECISION);
 
       c = *++fmt;
-      if (isdigit(c) && c != '0') {
+      if (isdigit(c)) {
         while (true) {
           flags.AppendPrecision(c);
           c = *++fmt;
