@@ -78,7 +78,7 @@ public:
   }
 
   void PutOctalUInt(uintmax_t x, int flags, unsigned int minwidth,
-                         unsigned int precision) {
+                    unsigned int precision) {
     return PutIntImpl<uintmax_t, 8, false>(x, flags, minwidth, precision);
   }
 
@@ -194,7 +194,7 @@ protected:
     if constexpr (Radix == 0x10) {
       if ((flags & PRINT_CONVERSION_FLAG_ALTFORMAT) && (x != 0)) {
         prefix[prefix_len++] = '0';
-        prefix[prefix_len++] = (Capital ? 'x' : 'X');
+        prefix[prefix_len++] = (Capital ? 'X' : 'x');
       }
     }
 
