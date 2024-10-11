@@ -122,16 +122,20 @@ public:
     va_end(args);
 
     if (!ret) {
-      terminal_print("vcbprintf test worker expected error ");
+      terminal_print("vcbprintf test worker expected error from format |");
+      terminal_print(fmt);
+      terminal_print("| error ");
       print_integer_raw(ret_expect);
-      terminal_print(" but got success: ");
+      terminal_print(" but got success: \nexpect: ");
       terminal_print(buffer.get_buf());
       terminal_putchar('\n');
       return;
     }
 
     if (ret != ret_expect) {
-      terminal_print("vcbprintf test worker epxected error ");
+      terminal_print("vcbprintf test worker expected error |");
+      terminal_print(fmt);
+      terminal_print("| error ");
       print_integer_raw(ret_expect);
       terminal_print(" but got error ");
       print_integer_raw(ret);
