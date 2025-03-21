@@ -1,0 +1,354 @@
+/* 
+ * Kernel-level memory allocator in C++.
+ *
+ * Interface:
+ *   - __get_pages: low–level function to allocate pages (size is a multiple of PAGE_SIZE)
+ *   - get_pages: rounds size up to PAGE_SIZE multiples and calls __get_pages.
+ *   - ookmalloc/ookfree: allocate/free memory with a header to record allocation type.
+ *   - register_region: register a contiguous region of memory (pages) to be managed.
+ *
+ * In this implementation:
+ *   - The buddy allocator manages regions of PAGE_SIZE–aligned memory.
+ *   - __get_pages is implemented using the buddy allocator.
+ *   - Small allocations (including header) are served via a simple slab allocator.
+ */
+
+#include <stddef.h>
+#include <stdint.h>
+
+#define PAGE_SIZE (1 << 12) // 4096 bytes per page
+#define MAGIC 0xDEADBEEF    // magic value for basic sanity checking
+
+// For small allocations we use a fixed threshold.
+#define SLAB_THRESHOLD 2048
+
+// Maximum order for the buddy allocator. (order 0 == 1 page, order 1 == 2 pages, etc.)
+#define MAX_BUDDY_ORDER 16
+
+// Maximum number of regions to be registered.
+#define MAX_REGIONS 16
+
+/* --- Data Structures for Allocation Headers --- */
+enum AllocationType {
+  SLAB_ALLOC = 0,
+  BUDDY_ALLOC = 1,
+};
+
+struct BlockHeader {
+  uint32_t magic; // sanity check marker
+  uint32_t type;  // SLAB_ALLOC or BUDDY_ALLOC
+  union {
+    struct {
+      size_t slab_size;        // size of user–data (not including header)
+      struct SlabCache *cache; // slab cache from which this block came
+    } slab;
+    struct {
+      int order;   // buddy order used for allocation
+      size_t size; // total size (in bytes) of the allocated block
+    } buddy;
+  };
+};
+
+/* --- Buddy Allocator Data Structures --- */
+
+struct FreeBlock {
+  FreeBlock *next;
+};
+
+/* Each registered region is managed by the buddy allocator. */
+struct Region {
+  char *base;    // start address (must be PAGE_SIZE–aligned)
+  size_t size;   // size in bytes of the region
+  int max_order; // maximum order available (largest block = 2^max_order pages)
+  Region *next;
+  FreeBlock *free_list[MAX_BUDDY_ORDER +
+                       1]; // free lists for orders 0 .. MAX_BUDDY_ORDER
+};
+
+static Region *g_region_list = nullptr; // global list of regions
+
+// A static pool for region descriptors.
+static Region region_pool[MAX_REGIONS];
+static int region_pool_count = 0;
+
+/* Allocate a block of pages of order 'req_order' (i.e. block size = 2^req_order pages).
+  * This function searches registered regions for a free block and splits a larger block if needed.
+  */
+static void *buddy_alloc(int req_order) {
+  Region *region = g_region_list;
+  while (region) {
+    if (region->max_order >= req_order) {
+      for (int order = req_order; order <= region->max_order; order++) {
+        if (region->free_list[order]) {
+          // Remove the block from free list.
+          FreeBlock *block = region->free_list[order];
+          region->free_list[order] = block->next;
+          // Split the block until it reaches the requested order.
+          while (order > req_order) {
+            order--;
+            size_t block_size = ((size_t)1 << order) * PAGE_SIZE;
+            char *buddy = (char *)block + block_size;
+            FreeBlock *buddy_block = (FreeBlock *)buddy;
+            buddy_block->next = region->free_list[order];
+            region->free_list[order] = buddy_block;
+          }
+          return (void *)block;
+        }
+      }
+    }
+    region = region->next;
+  }
+  return nullptr; // Allocation failed
+}
+
+/* Free a block that was allocated by buddy_alloc.
+  * The function attempts to merge the freed block with its buddy if possible.
+  */
+static void buddy_free(char *block, int order) {
+  Region *region = g_region_list;
+  // Find the region that owns this block.
+  while (region) {
+    if (block >= region->base && block < region->base + region->size) {
+      break;
+    }
+    region = region->next;
+  }
+  if (!region)
+    return; // block not in any registered region
+
+  size_t block_size = ((size_t)1 << order) * PAGE_SIZE;
+  // Attempt to merge with buddy blocks.
+  while (order < region->max_order) {
+    size_t offset = block - region->base;
+    size_t buddy_offset =
+        offset ^ block_size; // flip the bit corresponding to block_size
+    char *buddy = region->base + buddy_offset;
+    FreeBlock **prev = &region->free_list[order];
+    FreeBlock *current = region->free_list[order];
+    bool merged = false;
+    while (current) {
+      if ((char *)current == buddy) {
+        // Remove the buddy from the free list.
+        *prev = current->next;
+        merged = true;
+        break;
+      }
+      prev = &current->next;
+      current = current->next;
+    }
+    if (!merged)
+      break;
+    // Merge: use the lower address as the new block address.
+    if (buddy < block)
+      block = buddy;
+    order++;
+    block_size = ((size_t)1 << order) * PAGE_SIZE;
+  }
+  FreeBlock *free_block = (FreeBlock *)block;
+  free_block->next = region->free_list[order];
+  region->free_list[order] = free_block;
+}
+
+/* 
+  * register_region: Registers a contiguous memory region (must be PAGE_SIZE–aligned) for use by the buddy allocator.
+  * The region is split into as large blocks as possible (power-of–two number of pages).
+  */
+extern "C" void register_region(void *addr, size_t size) {
+  char *base = (char *)addr;
+  size_t num_pages = size / PAGE_SIZE;
+  if (num_pages == 0)
+    return;
+  while (num_pages > 0) {
+    size_t block_pages = 1;
+    int order = 0;
+    while (block_pages * 2 <= num_pages) {
+      block_pages *= 2;
+      order++;
+    }
+    if (region_pool_count >= MAX_REGIONS)
+      return; // no more descriptors available
+    Region *region = &region_pool[region_pool_count++];
+    region->base = base;
+    region->size = block_pages * PAGE_SIZE;
+    region->max_order = order;
+    for (int i = 0; i <= MAX_BUDDY_ORDER; i++) {
+      region->free_list[i] = nullptr;
+    }
+    // Insert at head of global region list.
+    region->next = g_region_list;
+    g_region_list = region;
+    // Add the entire block as a free block at the appropriate order.
+    FreeBlock *block = (FreeBlock *)base;
+    block->next = region->free_list[order];
+    region->free_list[order] = block;
+    base += block_pages * PAGE_SIZE;
+    num_pages -= block_pages;
+  }
+}
+
+/* 
+  * __get_pages: Low-level function to allocate raw pages.
+  * The size parameter is guaranteed to be a multiple of PAGE_SIZE.
+  * It determines the required buddy order and allocates a block using buddy_alloc.
+  * (No header is added here, as this function is used to service page requests.)
+  */
+extern "C" void *__get_pages(size_t size) {
+  if (size == 0)
+    return nullptr;
+  size_t pages = size / PAGE_SIZE;
+  int order = 0;
+  size_t block_pages = 1;
+  while (block_pages < pages) {
+    block_pages *= 2;
+    order++;
+  }
+  return buddy_alloc(order);
+}
+
+/* 
+  * get_pages: Rounds the size up to a multiple of PAGE_SIZE and calls __get_pages.
+  */
+static inline void *get_pages(size_t size) {
+  if (size % PAGE_SIZE != 0)
+    size = ((size + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
+  return __get_pages(size);
+}
+
+/* --- Slab Allocator Data Structures --- */
+
+/* For small allocations (size + header <= SLAB_THRESHOLD) we use a simple slab allocator.
+  * Each slab cache is for a fixed size (16, 32, 64, 128, 256, 512, 1024, 2048 bytes).
+  */
+struct FreeObject {
+  FreeObject *next;
+};
+
+struct SlabCache {
+  size_t object_size; // size of the user data (not counting header)
+  FreeObject *free_list;
+};
+
+static const int NUM_SLAB_CACHES = 8;
+static SlabCache slab_caches[NUM_SLAB_CACHES] = {
+    {16, nullptr},  {32, nullptr},  {64, nullptr},   {128, nullptr},
+    {256, nullptr}, {512, nullptr}, {1024, nullptr}, {2048, nullptr}};
+
+/* Returns the appropriate slab cache for a given object size.
+  * The size is rounded up to the next power-of–two, starting from 16.
+  */
+static SlabCache *get_slab_cache(size_t size) {
+  for (int i = 0; i < NUM_SLAB_CACHES; i++) {
+    if (size <= slab_caches[i].object_size)
+      return &slab_caches[i];
+  }
+  return nullptr;
+}
+
+/* Compute next power-of–two with a minimum of 16. */
+static size_t next_power_of_two(size_t n) {
+  size_t power = 16;
+  while (power < n)
+    power *= 2;
+  return power;
+}
+
+/* 
+  * ookmalloc: Allocate at least 'size' bytes.
+  * For small sizes (including header) it uses the slab allocator.
+  * For larger sizes, it rounds up to whole pages and uses the buddy allocator (via __get_pages).
+  * A header is prepended to record the allocation type.
+  */
+extern "C" void *ookmalloc(size_t size) {
+  if (size == 0)
+    return nullptr;
+
+  // Use slab allocation if size (with header) is small.
+  if (size + sizeof(BlockHeader) <= SLAB_THRESHOLD) {
+    size_t obj_size = next_power_of_two(size);
+    if (obj_size > SLAB_THRESHOLD)
+      obj_size = SLAB_THRESHOLD;
+    SlabCache *cache = get_slab_cache(obj_size);
+    if (!cache)
+      return nullptr;
+    if (cache->free_list) {
+      FreeObject *obj = cache->free_list;
+      cache->free_list = obj->next;
+      BlockHeader *header = (BlockHeader *)obj;
+      header->magic = MAGIC;
+      header->type = SLAB_ALLOC;
+      header->slab.cache = cache;
+      header->slab.slab_size = obj_size;
+      return (void *)(header + 1);
+    } else {
+      // No free object available: allocate a new page via __get_pages.
+      void *page = __get_pages(PAGE_SIZE);
+      if (!page)
+        return nullptr;
+      char *p = (char *)page;
+      size_t total_obj_size = obj_size + sizeof(BlockHeader);
+      int count = PAGE_SIZE / total_obj_size;
+      if (count <= 0)
+        count = 1;
+      // Use the first object for the allocation.
+      BlockHeader *header = (BlockHeader *)p;
+      header->magic = MAGIC;
+      header->type = SLAB_ALLOC;
+      header->slab.cache = cache;
+      header->slab.slab_size = obj_size;
+      // Carve out the remaining space into free objects.
+      for (int i = 1; i < count; i++) {
+        char *obj_addr = p + i * total_obj_size;
+        BlockHeader *hdr = (BlockHeader *)obj_addr;
+        FreeObject *free_obj = (FreeObject *)hdr;
+        free_obj->next = cache->free_list;
+        cache->free_list = free_obj;
+      }
+      return (void *)(header + 1);
+    }
+  } else {
+    // For larger allocations: round up size to include header.
+    size_t total_size = size + sizeof(BlockHeader);
+    size_t pages = (total_size + PAGE_SIZE - 1) / PAGE_SIZE;
+    size_t alloc_size = pages * PAGE_SIZE;
+    // Allocate pages using the buddy allocator via __get_pages.
+    void *block = __get_pages(alloc_size);
+    if (!block)
+      return nullptr;
+    BlockHeader *header = (BlockHeader *)block;
+    header->magic = MAGIC;
+    header->type = BUDDY_ALLOC;
+    // Record the buddy allocation info (order is deducible from pages allocated).
+    int order = 0;
+    size_t block_pages = 1;
+    while (block_pages < pages) {
+      block_pages *= 2;
+      order++;
+    }
+    header->buddy.order = order;
+    header->buddy.size = alloc_size;
+    return (void *)(header + 1);
+  }
+}
+
+/* 
+  * ookfree: Free a block allocated by ookmalloc.
+  * The header (immediately preceding the user pointer) is used to determine the allocation type.
+  */
+extern "C" void ookfree(void *p) {
+  if (!p)
+    return;
+  BlockHeader *header = ((BlockHeader *)p) - 1;
+  if (header->magic != MAGIC)
+    return; // Corrupted pointer or double free.
+  if (header->type == SLAB_ALLOC) {
+    SlabCache *cache = header->slab.cache;
+    FreeObject *obj = (FreeObject *)header;
+    obj->next = cache->free_list;
+    cache->free_list = obj;
+  } else if (header->type == BUDDY_ALLOC) {
+    int order = header->buddy.order;
+    buddy_free((char *)header, order);
+  }
+}
+
+int main() { return 0; }
