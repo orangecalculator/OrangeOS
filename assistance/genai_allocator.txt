@@ -7,7 +7,8 @@ Please manage the memory in linux kernel style. The pages should be managed in a
 ```[language=cpp]
 /* Assuming x86_64. */
 
-#define PAGE_SIZE (1 << 12)
+#define PAGE_SHIFT 12U
+#define PAGE_SIZE (1 << PAGE_SHIFT)
 
 struct ookpage; /* Should be defined by implementation. */
 
@@ -34,6 +35,7 @@ void ookfree(void *p);
 Make sure to write in C++. Please assume no C/C++ library.
 
 Here are some details of the request:
+  [Region Management]
   - Please support MAX_NUM_REGIONS regions. Emit error when register_region is called more than that.
   - For now, please set the value of MAX_NUM_REGIONS to 4. However, please make sure that the value can be easily changed. Also, please assume that the value is power of 2.
   - Please declare and use static data for minimal region metadata management.
@@ -41,10 +43,14 @@ Here are some details of the request:
   - Please manage a linear memory map just like in linux kernel, but allocate the memory map for each region at the tail of each registered region.
   - Please make the memory map entry as smallest as possible, because the memory overhead will be proportional to the number of pages.
 
+  [Page Management Layer]
   - Please make the buddy allocator customizable so that the user can customize distributing pages to each buddy allocator instance, when the user wants to increase the number of buddy allocators. Please assume that pages can be mixed even if the regions are different.
   - For now, please use a single buddy allocator and distribute all the pages to the global buddy allocator. Please define the global buddy allocator as a global variable.
   - Please check the region of the buddy when merging so that the buddies are not merged across region.
+  - Please take account that the get_pages and return_pages APIs do not require size arguments that are power-of-two. This means the allocator may need to split blocks to conform to current management schema.
+  - Memory metadata should be part of the memory map object, so that it is impossible to mix metadata with the managed region. Please avoid metadata management using the same region as allocated memory like memory chunk headers.
 
+  [Slab Management Layer]
   - For now, there is no need for caching in the slab allocator.
   - Please initialize the body of the slab allocator on call to ookminitialize. When initializing, please allocate an array of the slab allocators and initialize each, as it is not allowed to assume per_cpu mechanism.
   - Since the allocation will be done using the buddy allocator, which has page granularity, it should be okay to use big sized fields here.
@@ -52,13 +58,38 @@ Here are some details of the request:
   - Please retrieve pages on demand using the buddy allocator. Please make the buddy allocator picking mechanism customizable so that it can be easily customized by the user.
   - Please distinguish between allocated chunk sizes, and allocate several contiguous pages if needed. However, please make sure it can also use smaller sets to cope with fragmentation of pages.
   - Please support several allocation size in slab allocator style. I formerly required jemalloc style, but I think the slab allocator style would be more applicable.
+  - Slab allocation metadata should be managed at head of page blocks. Please avoid metadata management that intermixes with the chunk region, so that it is resistant against out-of-bounds access. To acquire the head of each page block, utilize the memory map.
+  - Pages do not have to be returned in the granularity of previously allocated chunk. Only a portion can be returned, as long as the size is a multiple of PAGE_SIZE. It is the allocator's responsibility to split the returned chunk if needed to conform to internal management schema.
+  - It is recommended to return the minimal amount of pages on __get_pages for memory efficiency. This means the leftover pages may have to be splitted several times to be returned back due to cope with fuzzy alignment of requested size.
 
+  [Allocator Behavior]
   - Please do minimal locking. It does not have to be optimal, but please separate locks for each instance, either the buddy allocator or the slab allocator.
   - Please store the size of the contiguous set of pages that are currently working together on the first page of memory map, when they are free in the buddy allocator.
   - Please make sure the trailing page descriptors of the set have size set to 0, when it is free on the buddy allocator. Please try to maintain this condition as an invariant, just for consistency.
   - Please use the memory map to retrieve the start of the slab page set when freeing chunks to the slab allocator.
   - In summary, the memory map entries of the pages will be used by the current owner. If needed, please maintain a flags field that can be read by others to track ownership.
+  - Please use doubly linked list like in linux, to support fast insert and delete from current list. Of course, it is recommended to provide linked list lookup and modify functions.
 
+  [Code Style]
   - Please avoid multiplication and division as much as possible. For power of 2, use shift operation.
+  - Please use class construct in case there needs to be local contexts that need to be shared across function boundaries.
+  - It is recommended to use optimized mathematical calculation routines like log2 such as using lzcnt in x86_64.
+  - Please name functions that should be executed in locked state as *_locked so that the assumption is explicit.
+  - Please use lock guard style classes so that there will not be lock leaks by human modification.
+  - Please use locking wrapper functions so that it is easy to port to different compiler usage.
 
   - Please report any peculiarities of the specification so that I can fix it.
+
+History
+  [Version 2]
+  - PAGE_SIZE should be a power of 2, and PAGE_SHIFT is the log value of PAGE_SIZE.
+  - Add recommendation of class construct usage.
+  - Add section names of each requirement block for conciseness.
+  - Explicitly state that get_pages and return_pages can be called with a size not power of two.
+  - Add utility function recommendations.
+  - Forbid inline metadata management.
+  - Forbid single linked lists.
+  - Add explicit locked state routines requirement.
+  - Add locking routine abstraction layer and lock guard style requirement.
+  - Pages do not have to be returned in the same way it was allocated.
+  - Memory management recommendation when requested size is not power-of-two on page allocator.
