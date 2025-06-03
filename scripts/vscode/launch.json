@@ -17,7 +17,16 @@
       "debugger_args": [
         "-ex",
         "set architecture i386",
+        // "-ex",
+        // "add-symbol-file build/kernelfull.o 0x100000 -s .rodata 0x1010000 -s .data 0x102000 -s .bss 0x102000",
       ],
+    },
+    {
+      "type": "lldb",
+      "name": "C/C++: run active file",
+      "request": "launch",
+      "program": "${fileDirname}/${fileBasenameNoExtension}",
+      "cwd": "${workspaceFolder}",
     },
   ]
 }
