@@ -1342,6 +1342,79 @@ void testRandomSizeSmallAllocation(
   assert(original_status.counts == new_status.counts);
 }
 
+void testRandomSizeAllocation(const TestRegionManager &test_region_manager) {
+
+  constexpr unsigned int SMALL_ALLOCATION_TEST_ORDER_BASE = 5;
+  constexpr unsigned long SMALL_ALLOCATION_TEST_COUNT[] = {
+      0x2000,
+      0x1000,
+      0x0800,
+      0x0400,
+  };
+
+  constexpr unsigned int LARGE_ALLOCATION_TEST_ORDER_BASE = 12;
+  constexpr unsigned long LARGE_ALLOCATION_TEST_COUNT[] = {
+      0x20,
+      0x10,
+      0x08,
+      0x04,
+  };
+
+  std::mt19937 rng(0x58c);
+  std::uniform_int_distribution<size_t> US(0, PAGE_SIZE);
+
+  OOKAllocator allocator;
+  size_t allocatable_size = 0;
+
+  for (int regionno = 0; regionno < test_region_manager.getTestRegionCount();
+       ++regionno) {
+    const auto [addr, size] = test_region_manager.getTestRegion(regionno);
+
+    int ret = allocator.register_region(reinterpret_cast<void *>(addr), size);
+    assert(!ret);
+
+    allocatable_size += size - OOKRegion::calc_memmap_size(size);
+  }
+
+  const auto original_status = getAllocatablePageSize(allocator);
+  assert(allocatable_size == original_status.total_size);
+
+  using memchunk_t = std::pair<void *, size_t>;
+  std::vector<memchunk_t> allocs;
+  for (unsigned int order_offset = 0;
+       order_offset < std::size(SMALL_ALLOCATION_TEST_COUNT); ++order_offset) {
+    const unsigned int order = SMALL_ALLOCATION_TEST_ORDER_BASE + order_offset;
+    const size_t random_size = US(rng) & ((1UL << order) - 1);
+
+    allocs.emplace_back(nullptr, random_size);
+  }
+  for (unsigned int order_offset = 0;
+       order_offset < std::size(LARGE_ALLOCATION_TEST_COUNT); ++order_offset) {
+    const unsigned int order = LARGE_ALLOCATION_TEST_ORDER_BASE + order_offset;
+    const size_t random_size = US(rng) & ((1UL << order) - 1);
+
+    allocs.emplace_back(nullptr, random_size);
+  }
+
+  std::shuffle(allocs.begin(), allocs.end(), rng);
+
+  for (auto &[p, size] : allocs) {
+    p = allocator.allocate(size);
+    assert(p != nullptr);
+  }
+
+  std::shuffle(allocs.begin(), allocs.end(), rng);
+
+  for (const auto [p, size] : allocs)
+    allocator.deallocate(p);
+  allocs.clear();
+
+  const auto new_status = getAllocatablePageSize(allocator);
+
+  assert(original_status.total_size == new_status.total_size);
+  assert(original_status.counts == new_status.counts);
+}
+
 int main() {
   testLinkedList();
 
@@ -1354,6 +1427,7 @@ int main() {
            testAllocatorResilience,
            testUniformSmallAllocation,
            testRandomSizeSmallAllocation,
+           testRandomSizeAllocation,
        }) {
     test_region_manager.clear();
     test_cb(test_region_manager);
